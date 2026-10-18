@@ -1,0 +1,45 @@
+<!-- The sponsors' logos and the backers' names (Services/Supporters.cs), in the Sponsor window and on the About page.
+     Hidden while the list is empty. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Filee.App.Views"
+             x:Class="Filee.App.Views.SupportersView">
+  <UserControl.Styles>
+    <Style Selector="Button.supporter">
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Margin" Value="0,0,6,6" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <!-- A logo without a dark version keeps a light tile in the dark theme -->
+    <Style Selector="Button.supporter.lightOnly">
+      <Setter Property="Background" Value="#F4F3F0" />
+    </Style>
+    <Style Selector="Button.supporter.lightOnly:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#E9E7E2" />
+    </Style>
+  </UserControl.Styles>
+  <StackPanel Spacing="6">
+    <TextBlock x:Name="Title" Classes="label" Text="{DynamicResource sponsor.thanks}" />
+    <ItemsControl x:Name="Logos">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <WrapPanel />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="v:SupporterItem">
+          <Button Classes="supporter" Classes.lightOnly="{Binding LightOnly}" Click="OnOpen" Tag="{Binding Url}" ToolTip.Tip="{Binding Name}">
+            <Panel>
+              <Image Source="{Binding Logo}" Height="{Binding $parent[v:SupportersView].LogoHeight}" MaxWidth="200" Stretch="Uniform"
+                     IsVisible="{Binding Logo, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"
+                         IsVisible="{Binding Logo, Converter={x:Static ObjectConverters.IsNull}}" />
+            </Panel>
+          </Button>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <TextBlock x:Name="Names" Classes="caption" TextWrapping="Wrap" />
+  </StackPanel>
+</UserControl>

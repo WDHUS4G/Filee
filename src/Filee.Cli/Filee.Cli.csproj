@@ -1,0 +1,27 @@
+<!--
+  Filee.Cli: the "filee" command line. Converts files and watches folders without the tray app, with the same
+  engines, presets and settings. Published next to Filee.exe as filee-cli.exe (one runtime for both); the installer
+  puts a "filee" shim on PATH (cli\filee.cmd).
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>filee-cli</AssemblyName>
+    <RootNamespace>Filee.Cli</RootNamespace>
+    <ApplicationIcon>..\Filee.App\Assets\Icons\filee.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Filee.Core\Filee.Core.csproj" />
+    <ProjectReference Include="..\Filee.Engines\Filee.Engines.csproj" />
+  </ItemGroup>
+
+  <!-- Error messages and built-in preset names, in English (the app's translation file). -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\Filee.App\Assets\i18n\en.json" LogicalName="Filee.Cli.en.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Filee.Cli.Tests" />
+  </ItemGroup>
+</Project>

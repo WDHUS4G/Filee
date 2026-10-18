@@ -1,0 +1,25 @@
+This package requires macOS 14 or later and contains a separate build for
+Apple Silicon or Intel Macs. The .NET runtime is included.
+Run ./install.sh to copy Filee.app to ~/Applications and add ~/.local/bin/filee.
+You can also move Filee.app into Applications manually. Keep its location stable
+so Accessibility and Finder Automation permissions continue to identify it.
+
+Test packages are ad-hoc signed and are not notarized. For a downloaded test
+build, use System Settings > Privacy & Security > Open Anyway when macOS blocks
+the first launch. Only open a build whose source and checksum you trust.
+
+Allow Filee in System Settings > Privacy & Security > Accessibility for global
+gestures. Allow Finder under Automation when using a selection shortcut.
+Enable the Finder Quick Action in Filee settings. Services can also be managed
+under System Settings > Keyboard > Keyboard Shortcuts > Services.
+
+Run ./uninstall.sh to remove the ~/Applications installation, integration and
+Filee-downloaded engines. Your settings and conversion results are kept.
+If integration cleanup fails, the installation is kept so you can fix the error
+and run the uninstaller again. A manually placed app in
+/Applications can be removed after running its Filee executable with
+--uninstall-cleanup.
+
+rhwp and 7-Zip are bundled. Other engines can be installed in Filee settings or
+discovered in the system. Public distribution requires Developer ID signing
+and notarization; neither is supplied by this test package.

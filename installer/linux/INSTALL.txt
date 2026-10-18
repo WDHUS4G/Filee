@@ -1,0 +1,29 @@
+Run ./Filee to test the extracted app, or ./filee-cli help for the command line.
+
+Run ./install.sh to install for the current user. It requires Python 3, creates
+an application launcher and ~/.local/bin/filee, and does not require root.
+Run ./uninstall.sh to remove this installation and Filee-downloaded engines.
+Your settings and converted files are kept. If integration cleanup fails, the
+installation is kept so you can fix the error and run the uninstaller again.
+An existing installation is never overwritten; uninstall it before replacing it.
+
+The .NET runtime is bundled; its native system libraries are still required.
+On Ubuntu 24.04, install the desktop and runtime dependencies with:
+
+sudo apt-get install ca-certificates libc6 libgcc-s1 libgssapi-krb5-2 libicu74 libssl3t64 libstdc++6 tzdata zlib1g libfontconfig1 libfreetype6 libx11-6 libice6 libsm6 libxrandr2 libxkbcommon0 libxi6 libxtst6 fonts-noto-cjk python3
+
+Other distributions use different package names. The desktop needs an X11
+server (or XWayland), fontconfig, FreeType and the X11 libraries above.
+X11 supports the global gesture toolbar. A native Wayland session has additional
+input restrictions; use the drop window and file-manager actions if needed.
+Ubuntu 24.04 is the automated build and smoke-test baseline.
+
+rhwp and 7-Zip are bundled. Other engines are installed from Filee settings or
+discovered in the system. Format support depends on available native engines.
+Optional engines can require additional system libraries. In particular, calibre
+may require libxcb-cursor0, libxcb-xinerama0 and other Qt/XCB dependencies.
+
+Dependency references:
+https://learn.microsoft.com/en-us/dotnet/core/install/linux-ubuntu-install#ubuntu-2404
+https://docs.avaloniaui.net/docs/deployment/linux
+https://calibre-ebook.com/download_linux

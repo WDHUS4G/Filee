@@ -1,0 +1,26 @@
+<!--
+  Shared MSBuild settings for every project in the repository.
+  Keep project files small: anything common belongs here.
+-->
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Missing XML docs are reported by review, not by the compiler; documenting only the non-obvious
+         parameters of a member is fine (CS1573). -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+
+    <Version>1.11.0</Version>
+    <Product>Filee</Product>
+    <Authors>Filee contributors</Authors>
+    <Copyright>Copyright (c) Filee contributors</Copyright>
+
+    <!-- Single source of truth for the GitHub repository (used by the updater and the About page). -->
+    <FileeRepositoryUrl>https://github.com/KnifeLemon/Filee</FileeRepositoryUrl>
+    <RepositoryUrl>$(FileeRepositoryUrl)</RepositoryUrl>
+  </PropertyGroup>
+</Project>

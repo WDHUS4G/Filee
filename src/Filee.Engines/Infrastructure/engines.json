@@ -1,0 +1,233 @@
+{
+  "_comment": "Downloadable conversion engines: pinned URL + SHA-256. Used by the app (Settings > Engines, first-run setup) and by build/fetch-engines.ps1. Bumping a version = change url, sha256 and size together.",
+  "components": {
+    "rhwp": {
+      "version": "0.8.7",
+      "url": "https://github.com/edwardkim/rhwp/releases/download/v0.8.7/rhwp-v0.8.7-windows-x86_64.zip",
+      "sha256": "F7AC326E98F595AE8FECD8DA7A614EE9A37DB77BDF938782A8E07C9DA473EC6F",
+      "size": 19796112,
+      "kind": "zip"
+    },
+    "7zip": {
+      "version": "26.03",
+      "url": "https://github.com/ip7z/7zip/releases/download/26.03/7z2603-x64.msi",
+      "sha256": "C0680064D698A62DD4A5A47F403DB356A6531A5473E4C4B1D090EA2590513926",
+      "size": 2007040,
+      "kind": "msi"
+    },
+    "pandoc": {
+      "version": "3.12",
+      "url": "https://github.com/jgm/pandoc/releases/download/3.12/pandoc-3.12-windows-x86_64.zip",
+      "sha256": "2A77EBC2517D13E95056E76B1CD5B574CFE958AC61AA6058117D80C22CA19B79",
+      "size": 42114462,
+      "kind": "zip"
+    },
+    "jre": {
+      "version": "21.0.12.1",
+      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip",
+      "sha256": "D35F31E712F0FCF6AC5A093EDC90204FBFF22F720BA3950BD09D331D5E621636",
+      "size": 48999141,
+      "kind": "zip"
+    },
+    "libreoffice": {
+      "version": "26.2.6",
+      "url": "https://download.documentfoundation.org/libreoffice/stable/26.2.6/win/x86_64/LibreOffice_26.2.6_Win_x86-64.msi",
+      "sha256": "F9877032FD908BEB9C0DDF06DF4AF5C2E85F419C42E14876C4CCE5AAE5FB2660",
+      "size": 373252096,
+      "kind": "msi"
+    },
+    "h2orestart": {
+      "version": "0.7.14",
+      "url": "https://github.com/ebandal/H2Orestart/releases/download/v0.7.14/H2Orestart.oxt",
+      "sha256": "CBEA23BC37861361BBC534BC0675E5BC67B36F712072490F82A9BF410D7C04D8",
+      "size": 606257,
+      "kind": "oxt"
+    },
+    "ghostscript": {
+      "version": "10.08.0",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/ghostscript-10.08.0-hac47afa_0.conda",
+      "sha256": "512BE9413C58B0AD3A2CD95A63EAEA73CBE32D9A6B9170C848BF825694A4ADB0",
+      "size": 19295904,
+      "kind": "conda"
+    },
+    "vcruntime": {
+      "version": "14.44.35208",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.44.35208-h818238b_41.conda",
+      "sha256": "EC706FE9368B837FBD05AF4851F5EBEF12BEF8C471A273F4805F7AF788407317",
+      "size": 682908,
+      "kind": "conda"
+    },
+    "ffmpeg": {
+      "version": "9.0.2",
+      "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-full_build-shared.zip",
+      "sha256": "8D31E162F1616E37AAB3FA2DB991B97E1B8DBEB1C8465FD81A81BE16FF91B328",
+      "size": 99899672,
+      "kind": "zip"
+    },
+    "calibre": {
+      "version": "9.15.0",
+      "url": "https://download.calibre-ebook.com/9.15.0/calibre-64bit-9.15.0.msi",
+      "sha256": "0F96AE06165C2419607C1C66726C091A78E89E08EA69F077CF3E2C884E800853",
+      "size": 226549760,
+      "kind": "msi"
+    }
+  },
+  "platforms": {
+    "linux-x64": {
+      "components": {
+        "rhwp": {
+          "version": "0.8.7",
+          "url": "https://github.com/edwardkim/rhwp/releases/download/v0.8.7/rhwp-v0.8.7-linux-x86_64.tar.gz",
+          "sha256": "F1E541A25CFE76B6BC1DAF18BF9C1F9A5AC5E03E2C01B188DAAF54107214F631",
+          "size": 14678662,
+          "kind": "tar.gz"
+        },
+        "7zip": {
+          "version": "26.03",
+          "url": "https://github.com/ip7z/7zip/releases/download/26.03/7z2603-linux-x64.tar.xz",
+          "sha256": "DC99EFF5008F1AB79BD7084C68513701547A808A89502BF4133683535AB3C695",
+          "size": 1575072,
+          "kind": "tar.xz"
+        },
+        "pandoc": {
+          "version": "3.12",
+          "url": "https://github.com/jgm/pandoc/releases/download/3.12/pandoc-3.12-linux-amd64.tar.gz",
+          "sha256": "67D7D011FED8C8543306022B985B9B2499AB9B74818DF91D8727C7E9EBC5BA06",
+          "size": 35326100,
+          "kind": "tar.gz"
+        },
+        "ffmpeg": {
+          "version": "9.0.2",
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-9.0.tar.xz",
+          "sha256": "68EE646831ADAAE2495618346F3BBA94FF207FF83BBD34D643E7004730D66269",
+          "size": 151017172,
+          "kind": "tar.xz"
+        },
+        "calibre": {
+          "version": "9.15.0",
+          "url": "https://github.com/kovidgoyal/calibre/releases/download/v9.15.0/calibre-9.15.0-x86_64.txz",
+          "sha256": "3F5301C0AA51E5FB2D5F6DCD04024BA4E86501AB328CE5D9D6760EFCCB887990",
+          "size": 194998300,
+          "kind": "tar.xz"
+        }
+      }
+    },
+    "linux-arm64": {
+      "components": {
+        "rhwp": {
+          "version": "0.8.7",
+          "url": "https://github.com/edwardkim/rhwp/releases/download/v0.8.7/rhwp-v0.8.7-linux-aarch64.tar.gz",
+          "sha256": "C4A70F5ED11B99586EE89D1AC9069145D58A0831D00E87858BB01626E2EBF313",
+          "size": 13842675,
+          "kind": "tar.gz"
+        },
+        "7zip": {
+          "version": "26.03",
+          "url": "https://github.com/ip7z/7zip/releases/download/26.03/7z2603-linux-arm64.tar.xz",
+          "sha256": "2389BA20E4D8295E8709C20B6263B69BD1EC4972FE38A04AD7A1BADBF595B996",
+          "size": 1328620,
+          "kind": "tar.xz"
+        },
+        "pandoc": {
+          "version": "3.12",
+          "url": "https://github.com/jgm/pandoc/releases/download/3.12/pandoc-3.12-linux-arm64.tar.gz",
+          "sha256": "6CEFCF7100E23A99447C26F89D1FF5B253F3407FCEF99A9E27AE06F3ED16CB82",
+          "size": 37857559,
+          "kind": "tar.gz"
+        },
+        "ffmpeg": {
+          "version": "9.0.2",
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linuxarm64-gpl-9.0.tar.xz",
+          "sha256": "91AFCD7695D4BBBB9E0057AA10BAAF9875EC4E1A97303F9059EC971336A2AB46",
+          "size": 127445692,
+          "kind": "tar.xz"
+        },
+        "calibre": {
+          "version": "9.15.0",
+          "url": "https://github.com/kovidgoyal/calibre/releases/download/v9.15.0/calibre-9.15.0-arm64.txz",
+          "sha256": "15AB887F9D787809BC834CA0EA6408E981B409F0B23046C41C18DE948EB50A38",
+          "size": 182488416,
+          "kind": "tar.xz"
+        }
+      }
+    },
+    "osx-x64": {
+      "components": {
+        "rhwp": {
+          "version": "0.8.7",
+          "url": "https://github.com/edwardkim/rhwp/releases/download/v0.8.7/rhwp-v0.8.7-macos-x86_64.tar.gz",
+          "sha256": "07B1A5EA570E410D1B52B4D848A94F00C64674E84004883C62EFAD7DAAB61DA4",
+          "size": 14156825,
+          "kind": "tar.gz"
+        },
+        "7zip": {
+          "version": "26.03",
+          "url": "https://github.com/ip7z/7zip/releases/download/26.03/7z2603-mac.tar.xz",
+          "sha256": "5CA87677072C59F5602E5C49BAA27D4694BACD2259B4E507F0094249D4281480",
+          "size": 1863192,
+          "kind": "tar.xz"
+        },
+        "pandoc": {
+          "version": "3.12",
+          "url": "https://github.com/jgm/pandoc/releases/download/3.12/pandoc-3.12-x86_64-macOS.zip",
+          "sha256": "18577F9460C3DC5D2651AD3BAB37D513BC2034A5A777FBE18FA0A5ACF2E936EA",
+          "size": 26442035,
+          "kind": "zip"
+        },
+        "calibre": {
+          "version": "9.15.0",
+          "url": "https://github.com/kovidgoyal/calibre/releases/download/v9.15.0/calibre-9.15.0.dmg",
+          "sha256": "1B3A7451175B73AE2BAA28FE1BC1C53EE34D65B489881E7EC02C20F9E0FF6019",
+          "size": 350293492,
+          "kind": "dmg"
+        },
+        "libreoffice": {
+          "version": "26.2.6",
+          "url": "https://download.documentfoundation.org/libreoffice/stable/26.2.6/mac/x86_64/LibreOffice_26.2.6_MacOS_x86-64.dmg",
+          "sha256": "135B8A95B8133396D54BF8E726DBC0066145EFA0D785963FC3D4592ACBFCFE5B",
+          "size": 308308875,
+          "kind": "dmg"
+        }
+      }
+    },
+    "osx-arm64": {
+      "components": {
+        "rhwp": {
+          "version": "0.8.7",
+          "url": "https://github.com/edwardkim/rhwp/releases/download/v0.8.7/rhwp-v0.8.7-macos-aarch64.tar.gz",
+          "sha256": "6ED46AA63F6D10C447842999F73ABC59CF9586C5645FEFC5E763BD6A6D43662D",
+          "size": 12941874,
+          "kind": "tar.gz"
+        },
+        "7zip": {
+          "version": "26.03",
+          "url": "https://github.com/ip7z/7zip/releases/download/26.03/7z2603-mac.tar.xz",
+          "sha256": "5CA87677072C59F5602E5C49BAA27D4694BACD2259B4E507F0094249D4281480",
+          "size": 1863192,
+          "kind": "tar.xz"
+        },
+        "pandoc": {
+          "version": "3.12",
+          "url": "https://github.com/jgm/pandoc/releases/download/3.12/pandoc-3.12-arm64-macOS.zip",
+          "sha256": "F148CA09C9F36594DB527A9FC988AD736290CE428F79594C50208CD1EC58B3C0",
+          "size": 42267373,
+          "kind": "zip"
+        },
+        "calibre": {
+          "version": "9.15.0",
+          "url": "https://github.com/kovidgoyal/calibre/releases/download/v9.15.0/calibre-9.15.0.dmg",
+          "sha256": "1B3A7451175B73AE2BAA28FE1BC1C53EE34D65B489881E7EC02C20F9E0FF6019",
+          "size": 350293492,
+          "kind": "dmg"
+        },
+        "libreoffice": {
+          "version": "26.2.6",
+          "url": "https://download.documentfoundation.org/libreoffice/stable/26.2.6/mac/aarch64/LibreOffice_26.2.6_MacOS_aarch64.dmg",
+          "sha256": "94BB3248DF074C225490A8A6D1D9DC87C7D6783DBB7A8E9F0D0C3D94348552AF",
+          "size": 297798926,
+          "kind": "dmg"
+        }
+      }
+    }
+  }
+}

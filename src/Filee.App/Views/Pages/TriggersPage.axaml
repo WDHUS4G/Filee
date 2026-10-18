@@ -1,0 +1,162 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Filee.App.ViewModels.Pages"
+             xmlns:c="using:Filee.App.Controls"
+             x:Class="Filee.App.Views.Pages.TriggersPage"
+             x:DataType="vm:TriggersPageViewModel">
+  <StackPanel Spacing="18">
+    <DockPanel>
+      <Button DockPanel.Dock="Right" Classes="accent" Command="{Binding AddCommand}">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Plus}" />
+          <TextBlock Text="{DynamicResource triggers.add}" />
+        </StackPanel>
+      </Button>
+      <StackPanel>
+        <TextBlock Classes="h1" Text="{DynamicResource triggers.title}" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="{DynamicResource triggers.description}" />
+      </StackPanel>
+    </DockPanel>
+
+    <StackPanel Spacing="8">
+      <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding PlatformNotice}"
+                 IsVisible="{Binding PlatformNotice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <TextBlock Classes="caption" TextWrapping="Wrap" Text="{Binding HookStatus}" />
+      <TextBlock Classes="caption" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" Text="{Binding IntegrationError}"
+                 IsVisible="{Binding IntegrationError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <WrapPanel>
+        <Button Content="{DynamicResource triggers.open_accessibility}" Command="{Binding OpenAccessibilityCommand}"
+                IsVisible="{Binding IsMacOS}" Margin="0,0,8,0" />
+        <Button Content="{DynamicResource triggers.retry_hook}" Command="{Binding RetryHookCommand}" IsVisible="{Binding CanRetryHook}" />
+      </WrapPanel>
+    </StackPanel>
+
+    <ItemsControl ItemsSource="{Binding Gestures}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Spacing="12" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:TriggerGestureViewModel">
+          <Border Classes="card">
+            <StackPanel Spacing="14">
+              <!-- Header: on/off, summary, remove -->
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Classes="icon"
+                        Command="{Binding $parent[ItemsControl].((vm:TriggersPageViewModel)DataContext).RemoveCommand}"
+                        CommandParameter="{Binding}" ToolTip.Tip="{DynamicResource triggers.remove}">
+                  <PathIcon Width="15" Height="15" Data="{StaticResource Icon.Delete}" />
+                </Button>
+                <ToggleSwitch DockPanel.Dock="Left" IsChecked="{Binding Enabled}" OnContent="" OffContent="" Margin="0,0,8,0" />
+                <Border Classes="badge ok" VerticalAlignment="Center" HorizontalAlignment="Left">
+                  <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Foreground="{DynamicResource AccentStrongBrush}" />
+                </Border>
+              </DockPanel>
+
+              <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,14,Auto">
+                <StackPanel>
+                  <TextBlock Classes="label" Text="{DynamicResource triggers.kind}" />
+                  <ComboBox ItemsSource="{Binding Kinds}" SelectedItem="{Binding Kind}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Classes="label" Text="{DynamicResource triggers.scope}" />
+                  <ComboBox ItemsSource="{Binding Scopes}" SelectedItem="{Binding Scope}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="2">
+                  <TextBlock Classes="label" Text="{DynamicResource triggers.modifiers}" />
+                  <WrapPanel>
+                    <ToggleButton Content="Ctrl" IsChecked="{Binding Ctrl}" Margin="0,0,6,6" />
+                    <ToggleButton Content="Alt" IsChecked="{Binding Alt}" Margin="0,0,6,6" />
+                    <ToggleButton Content="Shift" IsChecked="{Binding Shift}" Margin="0,0,6,6" />
+                    <ToggleButton Content="{Binding MetaLabel}" IsChecked="{Binding Meta}" Margin="0,0,6,6" />
+                  </WrapPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Grid.Column="2" Spacing="10">
+                  <StackPanel IsVisible="{Binding UsesMouse}">
+                    <TextBlock Classes="label" Text="{DynamicResource triggers.button}" />
+                    <ComboBox ItemsSource="{Binding Buttons}" SelectedItem="{Binding Button}" HorizontalAlignment="Stretch" />
+                  </StackPanel>
+                  <StackPanel IsVisible="{Binding UsesKey}">
+                    <TextBlock Classes="label" Text="{DynamicResource triggers.key}" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Border Classes="badge" MinWidth="120" Padding="12,6">
+                        <TextBlock Text="{Binding KeyText}" FontWeight="SemiBold" />
+                      </Border>
+                      <ToggleButton IsChecked="{Binding IsRecording}" KeyDown="OnRecorderKeyDown">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Record}" Foreground="{DynamicResource DangerBrush}" />
+                          <TextBlock Text="{Binding RecordLabel}" />
+                        </StackPanel>
+                      </ToggleButton>
+                      <Button Classes="ghost" Content="{DynamicResource triggers.clear}" Command="{Binding ClearKeyCommand}" />
+                    </StackPanel>
+                  </StackPanel>
+                </StackPanel>
+              </Grid>
+
+              <StackPanel IsVisible="{Binding UsesThreshold}">
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Right" Text="{Binding ThresholdText}" FontWeight="SemiBold" />
+                  <TextBlock Classes="label" Text="{DynamicResource triggers.threshold}" />
+                </DockPanel>
+                <Slider Minimum="0" Maximum="80" Value="{Binding DragThreshold}" TickFrequency="1" IsSnapToTickEnabled="True" />
+              </StackPanel>
+              <StackPanel IsVisible="{Binding UsesHold}">
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Right" FontWeight="SemiBold">
+                    <Run Text="{Binding HoldMilliseconds}" /><Run Text=" ms" />
+                  </TextBlock>
+                  <TextBlock Classes="label" Text="{DynamicResource triggers.hold_ms}" />
+                </DockPanel>
+                <Slider Minimum="150" Maximum="2000" Value="{Binding HoldMilliseconds}" TickFrequency="50" IsSnapToTickEnabled="True" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <Border Classes="card">
+      <StackPanel Spacing="8" DataContext="{Binding ExcludedApps}" x:DataType="vm:ExcludedAppsViewModel">
+        <TextBlock Classes="label" Text="{DynamicResource triggers.excluded}" />
+        <c:TagEditor Tags="{Binding Tags}" Suggestions="{Binding Suggestions}" Text="{Binding Text}"
+                     AddCommand="{Binding AddCommand}" RemoveCommand="{Binding RemoveCommand}"
+                     PlaceholderText="{DynamicResource triggers.excluded_hint}" />
+        <!-- Pick from the apps that have a window open now -->
+        <Button HorizontalAlignment="Left" Command="{Binding LoadRunningAppsCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Plus}" />
+            <TextBlock Text="{DynamicResource triggers.excluded_pick}" />
+          </StackPanel>
+          <Button.Flyout>
+            <Flyout Placement="BottomEdgeAlignedLeft">
+              <StackPanel Spacing="8" Width="280">
+                <TextBox Text="{Binding RunningSearch}" Watermark="{DynamicResource common.search}">
+                  <TextBox.InnerLeftContent>
+                    <PathIcon Width="14" Height="14" Margin="10,0,0,0" Data="{StaticResource Icon.Search}" Foreground="{DynamicResource TextSecondaryBrush}" />
+                  </TextBox.InnerLeftContent>
+                </TextBox>
+                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource triggers.excluded_none_running}"
+                           IsVisible="{Binding NoRunningApps}" />
+                <ScrollViewer MaxHeight="280">
+                  <ItemsControl ItemsSource="{Binding VisibleRunningApps}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Content="{Binding}"
+                                Command="{Binding $parent[ItemsControl].((vm:ExcludedAppsViewModel)DataContext).AddCommand}" CommandParameter="{Binding}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </StackPanel>
+            </Flyout>
+          </Button.Flyout>
+        </Button>
+        <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource triggers.excluded_note}" />
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

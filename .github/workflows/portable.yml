@@ -1,0 +1,209 @@
+name: Linux and macOS packages
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ''
+        required: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (empty uses Directory.Build.props)'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            rid: linux-x64
+          - runner: ubuntu-24.04-arm
+            rid: linux-arm64
+          - runner: macos-15
+            rid: osx-arm64
+          - runner: macos-15-intel
+            rid: osx-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Linux desktop dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates libc6 libgcc-s1 libgssapi-krb5-2 libicu74 libssl3t64 libstdc++6 tzdata zlib1g \
+            libfontconfig1 libfreetype6 libx11-6 libice6 libsm6 libxrandr2 libxkbcommon0 libxi6 libxtst6 xvfb fonts-noto-cjk
+
+      - name: Fonts
+        run: ./build/fetch-fonts.ps1
+
+      - name: Restore engine downloads
+        uses: actions/cache@v4
+        with:
+          path: build/.cache/portable-downloads
+          key: portable-engines-${{ matrix.rid }}-${{ hashFiles('src/Filee.Engines/Infrastructure/engines.json') }}
+
+      - name: Build and test native projects
+        run: |
+          ./build/fetch-portable-engines.ps1 -Runtime '${{ matrix.rid }}' -Destination engines
+          dotnet build Filee.slnx -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $projects = @('Filee.Core.Tests', 'Filee.Platform.Tests', 'Filee.Engines.Tests', 'Filee.Cli.Tests', 'Filee.App.Tests')
+          foreach ($project in $projects) {
+            $testArguments = @('test', "tests/$project/$project.csproj", '--no-build', '-c', 'Release', '--logger', 'trx', '--results-directory', "TestResults/${{ matrix.rid }}",
+              '--filter', 'FullyQualifiedName!=Filee.App.Tests.ExplorerMenuTests.Every_native_import_exists_in_the_dll_it_names&FullyQualifiedName!=Filee.App.Tests.ExplorerMenuTests.Reading_the_registered_package_never_throws')
+            if ($IsLinux) {
+              xvfb-run -a env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 dotnet @testArguments
+            } else {
+              dotnet @testArguments
+            }
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Build portable package
+        env:
+          PACKAGE_VERSION: ${{ inputs.version }}
+        run: ./build/build-portable.ps1 -Runtime '${{ matrix.rid }}' -Version $env:PACKAGE_VERSION -SkipFonts
+
+      - name: Check archive and run native converters
+        run: |
+          $archives = @(Get-ChildItem Releases -Filter '*-${{ matrix.rid }}.tar.gz')
+          if ($archives.Count -ne 1) { throw 'Expected one portable archive.' }
+          $archive = $archives[0]
+          $expected = (Get-Content (Join-Path Releases ($archive.Name.Replace('.tar.gz', '-SHA256SUMS.txt')))).Split(' ')[0]
+          if ((Get-FileHash $archive.FullName -Algorithm SHA256).Hash -ne $expected) { throw 'Archive checksum mismatch.' }
+          $smoke = Join-Path $env:RUNNER_TEMP 'filee-smoke'
+          New-Item -ItemType Directory -Path $smoke | Out-Null
+          tar -xzf $archive.FullName -C $smoke
+          if ($LASTEXITCODE -ne 0) { throw 'Archive extraction failed.' }
+          $package = Join-Path $smoke ($archive.Name.Replace('.tar.gz', ''))
+          if ($IsMacOS) {
+            codesign --verify --deep --strict (Join-Path $package 'Filee.app')
+            if ($LASTEXITCODE -ne 0) { throw 'Extracted app signature did not verify.' }
+          }
+          $bin = if ($IsMacOS) { Join-Path $package 'Filee.app/Contents/MacOS' } else { $package }
+          $cli = Join-Path $bin 'filee-cli'
+          & $cli version
+          if ($LASTEXITCODE -ne 0) { throw 'CLI did not start.' }
+          & (Join-Path $bin 'engines/rhwp/rhwp') --version
+          if ($LASTEXITCODE -ne 0) { throw 'rhwp did not start.' }
+          & (Join-Path $bin 'engines/7zip/7zz') i | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw '7-Zip did not start.' }
+          $inputFile = Join-Path $smoke 'sample.txt'
+          'Filee 한글 conversion smoke test' | Set-Content $inputFile -Encoding utf8NoBOM
+          & $cli convert $inputFile --to hwpx -o (Join-Path $smoke 'converted') --json
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $smoke 'converted/sample.hwpx'))) { throw 'Published CLI conversion failed.' }
+          "FILEE_SMOKE_APP=$(Join-Path $bin 'Filee')" >> $env:GITHUB_ENV
+
+      - name: Launch native desktop app
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import signal
+          import subprocess
+          import sys
+          import time
+
+          app = os.environ['FILEE_SMOKE_APP']
+          shots = pathlib.Path(os.environ['RUNNER_TEMP']) / 'filee-screens'
+          shots.mkdir(exist_ok=True)
+          command = [app, '--settings', '--install-engines=', '--context-menu=off', '--start-with-system=off']
+          if os.environ['RUNNER_OS'] == 'Linux':
+              command = ['xvfb-run', '-a', 'env', '-u', 'WAYLAND_DISPLAY', 'XDG_SESSION_TYPE=x11', *command]
+          log_path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'filee-startup.log'
+          with log_path.open('w') as log:
+              process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+              try:
+                  time.sleep(8)
+                  if process.poll() is not None:
+                      raise RuntimeError('The desktop app exited before the startup check.')
+                  if os.environ['RUNNER_OS'] == 'macOS':
+                      # The real screen with Filee's window, as a person would see it (uploaded with the results).
+                      subprocess.run(['screencapture', '-x', str(shots / 'settings.png')], check=False, timeout=30)
+                      # A second start forwards to the running Filee, which brings its window to the front.
+                      try:
+                          subprocess.run([app], check=False, timeout=30)
+                      except subprocess.TimeoutExpired:
+                          raise RuntimeError('A second start did not hand over to the running Filee.')
+                      time.sleep(4)
+                      subprocess.run(['screencapture', '-x', str(shots / 'second-start.png')], check=False, timeout=30)
+                      if process.poll() is not None:
+                          raise RuntimeError('The desktop app exited after a second start.')
+                  quit_code = 'import os, sys; os.setsid(); os.execv(sys.argv[1], [sys.argv[1], "--quit"])'
+                  # Reap Filee as soon as it ends while --quit waits for it, as launchd or a shell would: a process
+                  # that has ended but was not reaped by its parent (this script) still counts as running.
+                  quitter = subprocess.Popen([sys.executable, '-c', quit_code, app])
+                  quit_deadline = time.monotonic() + 30
+                  while quitter.poll() is None:
+                      process.poll()
+                      if time.monotonic() > quit_deadline:
+                          quitter.kill()
+                          raise RuntimeError('filee --quit did not finish.')
+                      time.sleep(0.05)
+                  if quitter.returncode != 0:
+                      raise RuntimeError(f'filee --quit exited with {quitter.returncode}.')
+                  if process.wait(timeout=15) != 0:
+                      raise RuntimeError('The desktop app did not exit cleanly.')
+              except BaseException:
+                  log.flush()
+                  print(log_path.read_text(errors='replace'), file=sys.stderr)
+                  raise
+              finally:
+                  if process.poll() is None:
+                      os.killpg(process.pid, signal.SIGTERM)
+                      try:
+                          process.wait(timeout=10)
+                      except subprocess.TimeoutExpired:
+                          os.killpg(process.pid, signal.SIGKILL)
+                          process.wait()
+          PY
+
+      - name: Collect Filee logs
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/filee-screens"
+          for logs in "$HOME/Library/Application Support/Filee/logs" "$HOME/.config/Filee/logs"; do
+            if [ -d "$logs" ]; then cp -R "$logs" "$RUNNER_TEMP/filee-screens/"; fi
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-${{ matrix.rid }}
+          path: |
+            Releases/*-${{ matrix.rid }}.tar.gz
+            Releases/*-${{ matrix.rid }}-SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unix-test-results-${{ matrix.rid }}
+          path: |
+            TestResults/${{ matrix.rid }}/
+            tests/Filee.App.Tests/bin/Release/net10.0/screenshots/
+            ${{ runner.temp }}/filee-startup.log
+            ${{ runner.temp }}/filee-screens/
+          if-no-files-found: ignore

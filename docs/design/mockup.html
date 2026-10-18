@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<!--
+  Filee UI mockup (design reference for contributors).
+  Interactive: switch profiles, drag chips onto the donut / slices back to the palette / slices onto each other,
+  right-click or ✎ a slice for the preset popup, toggle "reduce animations".
+  The real implementation: src/Filee.App/Controls/DonutMenu.cs and Views/Pages/ToolbarPage.axaml.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filee mockup</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<style>
+:root{--surface-0:#F6F5F1;--surface-1:#EFEDE6;--surface-2:#FFFFFF;--text-primary:#1F1E1D;--text-secondary:#6B6A66;--text-muted:#9C9A92;
+--border:rgba(0,0,0,.09);--border-strong:rgba(0,0,0,.18);--bg-accent:#E3E1FA;--text-accent:#3C3489;--border-accent:#7F77DD;
+--bg-success:#DDF3EA;--text-success:#0F6E56;--text-warning:#854F0B;--text-danger:#A32D2D;--radius:10px;
+font-family:"Noto Sans KR","Noto Sans",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root{--surface-0:#1B1B19;--surface-1:#232321;--surface-2:#2C2C2A;--text-primary:#F1EFE8;--text-secondary:#B4B2A9;
+--text-muted:#888780;--border:rgba(255,255,255,.1);--border-strong:rgba(255,255,255,.2);--bg-accent:#3C3489;--text-accent:#CECBF6;--border-accent:#AFA9EC;
+--bg-success:#085041;--text-success:#9FE1CB}}
+body{margin:0;padding:24px;background:var(--surface-0);color:var(--text-primary)}
+button,select,input{font:inherit;color:inherit;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--radius);padding:5px 10px}
+button{cursor:pointer}
+.fxA{transform-origin:160px 160px;animation:fxin .55s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes fxin{from{opacity:0;transform:scale(.55) rotate(-25deg)}to{opacity:1;transform:none}}
+.fxS{transition:transform .35s cubic-bezier(.34,1.56,.64,1);cursor:grab;touch-action:none}
+.fxS path{fill:var(--surface-2);stroke:var(--surface-1);stroke-width:2.5;transition:fill .2s}
+.fxS text{fill:var(--text-primary);font-size:12px;font-weight:600;pointer-events:none;user-select:none}
+.fxS.hot path{fill:var(--bg-accent)}.fxS.hot text{fill:var(--text-accent)}
+.fxS.drop path{fill:var(--bg-success)}.fxS.drop text{fill:var(--text-success)}.fxS.dim{opacity:.35}
+#fx.red .fxA{animation:none}#fx.red .fxS,#fx.red .fxS path{transition:none}
+.fxchip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;margin:3px;border-radius:999px;border:1px solid var(--border-strong);background:var(--surface-2);font-size:12px;cursor:grab;user-select:none;touch-action:none}
+.fxpf{display:block;width:100%;text-align:left;font-size:13px;padding:6px 8px;margin-bottom:4px}
+.fxpf.on{background:var(--bg-accent);color:var(--text-accent);border-color:var(--border-accent)}
+.fxf{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--text-secondary)}
+</style>
+</head>
+<body>
+<div id="fx" style="position:relative;max-width:760px;margin:0 auto">
+<div style="border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--surface-2)">
+  <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface-1);flex-wrap:wrap">
+    <i class="ti ti-circle-dashed"></i><span style="font-size:13px;font-weight:600">Filee 설정 · 원형 툴바</span>
+    <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <label style="font-size:12px;color:var(--text-secondary)"><input type="checkbox" id="fxred"> 애니메이션 줄이기</label>
+      <button id="fxplay" style="font-size:12px"><i class="ti ti-player-play"></i> 열기 재생</button>
+    </span>
+  </div>
+  <div id="fxed" style="position:relative;display:grid;grid-template-columns:130px 320px minmax(0,1fr);gap:14px;padding:14px;min-height:440px;background:var(--surface-1)">
+    <div>
+      <p style="font-size:12px;color:var(--text-secondary);margin:0 0 6px">1. 프로필 선택</p>
+      <div id="fxprof"></div>
+      <button id="fxadd" class="fxpf" style="border-style:dashed;color:var(--text-secondary)"><i class="ti ti-plus"></i> 새 프로필</button>
+    </div>
+    <div>
+      <p style="font-size:12px;color:var(--text-secondary);margin:0 0 6px">2. 프리셋 배치 (실제 툴바와 동일한 모양)</p>
+      <div id="fxw" style="position:relative;width:320px;height:320px">
+        <svg id="fxsvg" width="320" height="320" viewBox="0 0 320 320" style="overflow:visible"></svg>
+        <button id="fxpen" aria-label="프리셋 편집" style="position:absolute;width:28px;height:28px;padding:0;border-radius:50%;visibility:hidden;display:flex;align-items:center;justify-content:center"><i class="ti ti-pencil" style="font-size:15px"></i></button>
+      </div>
+      <p id="fxext" style="font-size:12px;color:var(--text-secondary);margin:6px 0 0"></p>
+      <p id="fxmsg" style="font-size:12px;color:var(--text-warning);margin:2px 0 0;min-height:16px"></p>
+    </div>
+    <div>
+      <p style="font-size:12px;color:var(--text-secondary);margin:0 0 6px">사용 가능한 프리셋</p>
+      <div id="fxpal" style="min-height:120px;padding:4px;border-radius:var(--radius);border:1px dashed var(--border-strong);background:var(--surface-2)"></div>
+      <div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-top:10px">
+        <div><i class="ti ti-drag-drop"></i> 칩을 도넛으로 끌면 추가</div>
+        <div><i class="ti ti-arrow-back-up"></i> 세그먼트를 여기로 끌면 빼기</div>
+        <div><i class="ti ti-arrows-sort"></i> 세그먼트끼리 끌면 순서 변경</div>
+        <div><i class="ti ti-pencil"></i> 우클릭 또는 연필 = 프리셋 편집</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="fxgh" style="position:absolute;pointer-events:none;visibility:hidden;z-index:9" class="fxchip"></div>
+</div>
+<script>
+const P={image:{name:'이미지',ext:'jpg, jpeg, png, bmp, tiff, webp, gif, heic',on:['PNG','WEBP','PDF','TIFF','BMP','ICO','JPG 70%','50% 축소'],off:['GIF','AVIF','흑백 PNG','300dpi TIFF']},pdf:{name:'PDF',ext:'pdf',on:['PNG','JPG','DOCX','HWPX','TXT','PDF 분할','PDF 압축'],off:['TIFF','PDF/A','JPG 150dpi']},doc:{name:'오피스 문서',ext:'docx, doc, odt, rtf, xlsx, pptx',on:['PDF','ODT','HWPX','TXT','HTML'],off:['RTF','DOC','PDF/A']},hwp:{name:'HWP/HWPX',ext:'hwp, hwpx',on:['PDF','DOCX','PNG','TXT','HWPX'],off:['ODT','HTML','Markdown']}};
+const DET={},FM=['PNG','JPG','WEBP','TIFF','BMP','ICO','GIF','AVIF','PDF','DOCX','ODT','HWPX','TXT','HTML','RTF','DOC','MARKDOWN'];
+let cur='image',hov=-1,pd=null,nid=0;
+const NS='http://www.w3.org/2000/svg',C=160,R2=152,R1=62,$=i=>document.getElementById(i);
+const svg=$('fxsvg'),pen=$('fxpen'),pal=$('fxpal'),gh=$('fxgh'),root=$('fx'),wrap=$('fxw');
+const pt=(r,a)=>[C+r*Math.cos(a),C+r*Math.sin(a)];
+function seg(i,n){if(n===1)return `M${C-R2} ${C}A${R2} ${R2} 0 1 0 ${C+R2} ${C}A${R2} ${R2} 0 1 0 ${C-R2} ${C}M${C-R1} ${C}A${R1} ${R1} 0 1 1 ${C+R1} ${C}A${R1} ${R1} 0 1 1 ${C-R1} ${C}Z`;const sp=2*Math.PI/n,s=-Math.PI/2+i*sp-sp/2,e=s+sp,[a,b]=pt(R2,s),[c,d]=pt(R2,e),[f,g]=pt(R1,e),[h,k]=pt(R1,s);return `M${a} ${b}A${R2} ${R2} 0 0 1 ${c} ${d}L${f} ${g}A${R1} ${R1} 0 0 0 ${h} ${k}Z`}
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e}
+function render(anim){const p=P[cur],n=p.on.length;svg.innerHTML='';
+if(!n)svg.append(el('circle',{cx:C,cy:C,r:(R1+R2)/2,fill:'none','stroke-width':R2-R1,style:'stroke:var(--surface-2)'}));
+p.on.forEach((t,i)=>{const A=el('g',{class:'fxA'});A.style.animationDelay=(i*30)+'ms';if(!anim)A.style.animation='none';const S=el('g',{class:'fxS','data-seg':i});const pa=el('path',{d:seg(i,n)});if(n===1)pa.setAttribute('fill-rule','evenodd');const m=-Math.PI/2+i*2*Math.PI/n,[x,y]=n===1?[C,C-(R1+R2)/2]:pt(102,m);const tx=el('text',{x,y,'text-anchor':'middle','dominant-baseline':'central'});tx.textContent=t;S.append(pa,tx);A.append(S);svg.append(A);
+S.addEventListener('pointerenter',()=>setHov(i));S.addEventListener('pointerdown',e=>{if(e.button)return;e.preventDefault();pd={from:'on',idx:i,val:t,x:e.clientX,y:e.clientY,act:false}});S.addEventListener('contextmenu',e=>{e.preventDefault();openPop(i)})});
+const t1=el('text',{x:C,y:C-8,'text-anchor':'middle',style:'fill:var(--text-primary);font-size:14px;font-weight:600'});t1.textContent=p.name;const t2=el('text',{x:C,y:C+14,'text-anchor':'middle',style:'fill:var(--text-secondary);font-size:12px'});t2.textContent=n?n+' / 12':'여기로 끌어 놓기';svg.append(t1,t2);
+$('fxext').textContent='매칭 확장자: '+p.ext;
+$('fxprof').innerHTML='';Object.keys(P).forEach(k=>{const b=document.createElement('button');b.className='fxpf'+(k===cur?' on':'');b.textContent=P[k].name;b.onclick=()=>{cur=k;render(true)};$('fxprof').append(b)});
+pal.innerHTML='';p.off.forEach((t,i)=>{const c=document.createElement('span');c.className='fxchip';c.innerHTML='<i class="ti ti-grip-vertical"></i>'+t;c.onpointerdown=e=>{if(e.button)return;e.preventDefault();pd={from:'off',idx:i,val:t,x:e.clientX,y:e.clientY,act:false}};pal.append(c)});
+hov=-1;pen.style.visibility='hidden'}
+function clearHot(){svg.querySelectorAll('.fxS').forEach(s=>{s.classList.remove('hot');s.style.transform=''})}
+function setHov(i){if(pd&&pd.act)return;hov=i;const n=P[cur].on.length;clearHot();const s=svg.querySelector(`[data-seg="${i}"]`);s.classList.add('hot');const m=-Math.PI/2+i*2*Math.PI/n;if(n>1)s.style.transform=`translate(${Math.cos(m)*6}px,${Math.sin(m)*6}px)`;const [x,y]=n===1?[C,C-138]:pt(140,m);pen.style.left=(x-14)+'px';pen.style.top=(y-14)+'px';pen.style.visibility='visible'}
+wrap.addEventListener('pointerleave',()=>{if(pd&&pd.act)return;hov=-1;clearHot();pen.style.visibility='hidden'});
+pen.addEventListener('pointerdown',e=>e.stopPropagation());pen.onclick=()=>openPop(hov);
+function flash(t){$('fxmsg').textContent=t;setTimeout(()=>$('fxmsg').textContent='',1600)}
+document.addEventListener('pointermove',e=>{if(!pd)return;if(!pd.act&&Math.hypot(e.clientX-pd.x,e.clientY-pd.y)>5){pd.act=true;gh.textContent=pd.val;gh.style.visibility='visible';pen.style.visibility='hidden';clearHot();if(pd.from==='on')svg.querySelector(`[data-seg="${pd.idx}"]`).classList.add('dim')}if(!pd.act)return;const r=root.getBoundingClientRect();gh.style.left=(e.clientX-r.left+10)+'px';gh.style.top=(e.clientY-r.top+10)+'px';svg.querySelectorAll('.fxS').forEach(s=>s.classList.remove('drop'));const t=document.elementFromPoint(e.clientX,e.clientY),g=t&&t.closest('[data-seg]');if(g)g.classList.add('drop');pal.style.borderColor=(t&&t.closest('#fxpal')&&pd.from==='on')?'var(--border-accent)':''});
+document.addEventListener('pointerup',e=>{if(!pd)return;const d=pd;pd=null;gh.style.visibility='hidden';pal.style.borderColor='';if(!d.act)return;const t=document.elementFromPoint(e.clientX,e.clientY),g=t&&t.closest('[data-seg]'),inPal=t&&t.closest('#fxpal'),inD=t&&t.closest('#fxw'),p=P[cur];
+if(d.from==='on'){if(inPal){p.on.splice(d.idx,1);p.off.push(d.val)}else if(g){const ti=+g.dataset.seg;p.on.splice(d.idx,1);p.on.splice(ti,0,d.val)}}
+else if(g||inD){if(p.on.length>=12)flash('최대 12개까지 넣을 수 있어요');else{p.off.splice(d.idx,1);p.on.splice(g?+g.dataset.seg:p.on.length,0,d.val)}}
+render(false)});
+function openPop(i){if(i<0)return;const p=P[cur],nm=p.on[i],u=nm.toUpperCase(),d=DET[nm]||{fmt:FM.find(f=>u.includes(f))||'PNG',q:80,size:'원본',loc:'원본 폴더',pat:'{name}_{preset}',cf:'번호 붙이기',exif:true};
+const sel=(id,arr,v)=>`<select id="${id}" style="font-size:12px;width:100%">${arr.map(o=>`<option${o===v?' selected':''}>${o}</option>`).join('')}</select>`;
+const ov=document.createElement('div');ov.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:5';
+ov.innerHTML=`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;width:380px;font-size:13px">
+<div style="display:flex;align-items:center;gap:6px;font-weight:600;margin-bottom:10px"><i class="ti ti-pencil"></i>프리셋 편집<span style="margin-left:auto;font-size:11px;font-weight:400;color:var(--text-muted)">프리셋 화면과 같은 편집기</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<label class="fxf" style="grid-column:1/3">이름<input id="fpN" value="${nm}" style="width:100%;box-sizing:border-box"><span id="fpE" style="font-size:12px;color:var(--text-danger)"></span></label>
+<label class="fxf">대상 형식${sel('fpF',FM,d.fmt)}</label>
+<label class="fxf">크기${sel('fpZ',['원본','50%','긴 변 1920px','긴 변 1280px'],d.size)}</label>
+<label class="fxf" style="grid-column:1/3">품질 <span style="display:flex;gap:8px;align-items:center"><input type="range" id="fpQ" min="10" max="100" step="1" value="${d.q}" style="flex:1"><span id="fpQo" style="min-width:28px;color:var(--text-primary)">${d.q}</span></span></label>
+<label class="fxf">저장 위치${sel('fpL',['원본 폴더','하위 converted','지정 폴더…'],d.loc)}</label>
+<label class="fxf">이름 충돌 시${sel('fpC2',['번호 붙이기','덮어쓰기','건너뛰기'],d.cf)}</label>
+<label class="fxf" style="grid-column:1/3">파일명 패턴<input id="fpP" value="${d.pat}" style="width:100%;box-sizing:border-box"></label>
+<label style="grid-column:1/3;font-size:12px;color:var(--text-secondary)"><input type="checkbox" id="fpX"${d.exif?' checked':''}> 메타데이터(EXIF) 유지</label>
+</div>
+<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button id="fpCa">취소</button><button id="fpSv">저장</button></div></div>`;
+$('fxed').append(ov);const close=()=>ov.remove();
+ov.addEventListener('pointerdown',e=>{if(e.target===ov)close()});$('fpCa').onclick=close;
+$('fpQ').oninput=e=>$('fpQo').textContent=e.target.value;$('fpN').oninput=()=>$('fpE').textContent='';
+$('fpSv').onclick=()=>{const v=$('fpN').value.trim();if(!v){$('fpE').textContent='이름을 입력하세요';return}if(p.on.some((x,j)=>x===v&&j!==i)){$('fpE').textContent='이미 있는 프리셋 이름이에요';return}
+DET[v]={fmt:$('fpF').value,q:+$('fpQ').value,size:$('fpZ').value,loc:$('fpL').value,pat:$('fpP').value,cf:$('fpC2').value,exif:$('fpX').checked};p.on[i]=v;close();render(false)}}
+$('fxadd').onclick=()=>{const k='c'+(++nid);P[k]={name:'새 프로필 '+nid,ext:'(편집 가능)',on:[],off:['PNG','JPG','PDF','WEBP','TXT','DOCX']};cur=k;render(true)};
+$('fxplay').onclick=()=>render(true);
+$('fxred').onchange=e=>root.classList.toggle('red',e.target.checked);
+render(true);
+</script>
+</body>
+</html>

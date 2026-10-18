@@ -1,0 +1,42 @@
+<!-- "Engines you installed have a new version" card in the bottom-right corner, shown once per new engine version to
+     people who downloaded that engine (App.NotifyEngineUpdates). -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Filee.App.Views.EngineUpdateNoticeWindow"
+        Title="Filee"
+        Width="360"
+        SizeToContent="Height"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        CanResize="False">
+  <Border Classes="card" Margin="12" Padding="16,14">
+    <DockPanel>
+      <Border DockPanel.Dock="Left" Width="36" Height="36" CornerRadius="999" Margin="0,2,12,0" VerticalAlignment="Top"
+              Background="{DynamicResource AccentSoftBrush}">
+        <PathIcon Width="18" Height="18" Data="{StaticResource Icon.Engine}" Foreground="{DynamicResource AccentStrongBrush}" />
+      </Border>
+      <StackPanel Spacing="8">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="icon" Padding="4" VerticalAlignment="Top" Click="OnClose">
+            <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
+          </Button>
+          <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" Text="{DynamicResource engines.update_notice_title}" />
+        </DockPanel>
+        <TextBlock x:Name="CaptionText" Classes="caption" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+          <Button Classes="accent" Click="OnUpdate" Padding="12,5">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Download}" />
+              <TextBlock Text="{DynamicResource engines.update}" />
+            </StackPanel>
+          </Button>
+          <Button Content="{DynamicResource update.later}" Click="OnClose" Padding="12,5" />
+        </StackPanel>
+      </StackPanel>
+    </DockPanel>
+  </Border>
+</Window>

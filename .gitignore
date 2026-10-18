@@ -1,0 +1,32 @@
+# Build output
+bin/
+obj/
+artifacts/
+publish/
+Releases/
+
+# Downloaded conversion engines (see build/fetch-engines.ps1)
+engines/
+build/.cache/
+
+# IDE
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# Test results
+TestResults/
+*.trx
+coverage*/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Fonts are downloaded by build/fetch-fonts.ps1
+src/Filee.App/Assets/Fonts/*.ttf
+src/Filee.App/Assets/Fonts/*.otf

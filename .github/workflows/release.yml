@@ -1,0 +1,128 @@
+# Builds the Windows installer and publishes it to GitHub Releases.
+# Trigger: push a tag like v1.0.0  (git tag v1.0.0 && git push origin v1.0.0)
+#
+# Output (build/build-installer.ps1): Filee-<version>-win-Setup.exe (Inno Setup, installer/Filee.iss),
+# Filee-<version>-win-Portable.zip and Filee-<version>-SHA256SUMS.txt.
+# Release notes: the version's section of CHANGELOG.md (what changed, for people using Filee), then the list GitHub
+# generates from the pull requests merged since the previous release, grouped by label (.github/release.yml), with
+# their authors and new contributors.
+# Large engines are not in the installer; its engine page (or the app, on first run and in Settings > Engines)
+# downloads them.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  portable:
+    uses: ./.github/workflows/portable.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  windows:
+    needs: portable
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Fonts
+        shell: pwsh
+        run: ./build/fetch-fonts.ps1
+
+      - name: Restore Zig toolchain
+        uses: actions/cache/restore@v4
+        with:
+          path: build/.cache/zig-x86_64-windows-0.16.0
+          key: zig-0.16.0-x86_64-windows
+
+      # Windows 11 top-level Explorer menu: FileeExplorerMenu.dll (C, built with a pinned Zig toolchain) and the
+      # unsigned sparse package FileeExplorerMenu.msix. Built before the tests so they check the real files.
+      - name: Build Explorer menu extension
+        shell: pwsh
+        run: ./build/build-explorer-menu.ps1 -Version ${{ steps.version.outputs.value }}
+
+      # Same engines as CI, so the release runs the same tests (they are not part of the installer).
+      - name: Fetch rhwp, Pandoc and 7-Zip for engine tests
+        shell: pwsh
+        run: ./build/fetch-engines.ps1 -Only rhwp,pandoc,7zip
+
+      # Built first and tested like CI: the UI tests on their own with crash and hang blame (a crash names the
+      # running test and leaves a dump in TestResults), then the rest.
+      - name: Build
+        run: dotnet build Filee.slnx -c Release
+
+      - name: Test UI on its own
+        run: dotnet test tests/Filee.App.Tests --no-build -c Release --blame-crash --blame-hang-timeout 5m --logger "console;verbosity=normal" --results-directory TestResults/app
+
+      - name: Test
+        run: dotnet test Filee.slnx --no-build -c Release --filter "FullyQualifiedName!~Filee.App.Tests"
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-windows
+          path: TestResults/
+          if-no-files-found: ignore
+
+      # Publishes the app (Release, self-contained, ReadyToRun) with the Explorer menu extension and the bundled rhwp
+      # and 7-Zip, then compiles the installer (portable Inno Setup, pinned and verified) and zips the portable copy.
+      - name: Build installer and portable zip
+        shell: pwsh
+        run: ./build/build-installer.ps1 -Version ${{ steps.version.outputs.value }} -Portable
+
+      - name: Download Linux and macOS packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: portable-*
+          merge-multiple: true
+          path: Releases
+
+      - name: Publish the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = '${{ steps.version.outputs.value }}'
+          $files = Get-ChildItem Releases -File -Filter "Filee-$version-*" | ForEach-Object FullName
+          # "## 1.4.0" up to the next "## " heading of CHANGELOG.md, without the heading itself.
+          $changes = ''
+          $changelog = Get-Content CHANGELOG.md -Raw -Encoding utf8
+          if ($changelog -match "(?ms)^## $([regex]::Escape($version))[ \t]*\r?\n(.*?)(?=^## |\z)") {
+            # One line per list item: GitHub shows the line breaks of the 120-column file in release notes. Indented
+            # lines continue the item above, unless they start a nested item ("  - "), which keeps its own line.
+            $changes = $Matches[1].Trim() -replace '\r?\n +(?!- |\* |\d+\. )(?=\S)', ' '
+          }
+          if (-not $changes) { Write-Warning "CHANGELOG.md has no section for $version" }
+
+          # GitHub's generated notes: the merged pull requests (one list instead of its label headings, which would
+          # repeat the CHANGELOG's), new contributors and the full changelog link.
+          $generated = (gh api -X POST "repos/${{ github.repository }}/releases/generate-notes" -f tag_name='${{ github.ref_name }}' | ConvertFrom-Json).body
+          $prs = @()
+          if ($generated -match "(?ms)^## What's Changed[ \t]*\r?\n(.*?)(?=^## |^\*\*Full Changelog|\z)") {
+            $prs = @($Matches[1] -split '\r?\n' | Where-Object { $_ -match '^\* ' })
+          }
+          $tail = if ($generated -match "(?ms)(^## New Contributors.*|^\*\*Full Changelog.*)") { $Matches[1].Trim() } else { '' }
+
+          $parts = @("## What's Changed")
+          if ($changes) { $parts += $changes }
+          if ($prs.Count) { $parts += "### Pull requests`n`n" + ($prs -join "`n") }
+          if ($tail) { $parts += $tail }
+          $notesFile = Join-Path $env:RUNNER_TEMP 'notes.md'
+          Set-Content $notesFile ($parts -join "`n`n") -Encoding utf8
+          gh release create '${{ github.ref_name }}' --title "Filee $version" --notes-file $notesFile --verify-tag @files

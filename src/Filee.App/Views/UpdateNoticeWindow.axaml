@@ -1,0 +1,49 @@
+<!-- "A new version is out" card in the bottom-right corner (UpdateService.UpdateFound): how much it matters and what
+     it changes. Required updates show it every start, recommended ones once per version, optional ones never. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Filee.App.Views.UpdateNoticeWindow"
+        Title="Filee"
+        Width="360"
+        SizeToContent="Height"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        CanResize="False">
+  <Border Classes="card" Margin="12" Padding="16,14">
+    <DockPanel>
+      <Image DockPanel.Dock="Left" Source="avares://Filee/Assets/Icons/filee.png" Width="36" Height="36"
+             VerticalAlignment="Top" Margin="0,2,12,0" />
+      <StackPanel Spacing="8">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="icon" Padding="4" VerticalAlignment="Top" Click="OnClose">
+            <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
+          </Button>
+          <TextBlock x:Name="TitleText" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+        <StackPanel Spacing="4">
+          <Border x:Name="LevelPill" HorizontalAlignment="Left" CornerRadius="999" Padding="8,2">
+            <TextBlock x:Name="LevelText" FontSize="11.5" FontWeight="SemiBold" />
+          </Border>
+          <TextBlock x:Name="LevelHint" Classes="caption" TextWrapping="Wrap" />
+        </StackPanel>
+        <!-- One row per change; a wrapped line lines up with the text, not the bullet -->
+        <StackPanel x:Name="ChangesList" Spacing="3" />
+        <TextBlock x:Name="CaptionText" Classes="caption" TextWrapping="Wrap" />
+        <ProgressBar x:Name="Progress" Minimum="0" Maximum="100" IsVisible="False" />
+        <StackPanel x:Name="Buttons" Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+          <Button Classes="accent" Click="OnDownload" Padding="12,5">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Download}" />
+              <TextBlock x:Name="DownloadText" />
+            </StackPanel>
+          </Button>
+          <Button Content="{DynamicResource update.later}" Click="OnClose" Padding="12,5" />
+        </StackPanel>
+      </StackPanel>
+    </DockPanel>
+  </Border>
+</Window>

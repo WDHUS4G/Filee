@@ -1,0 +1,298 @@
+<!--
+  Preset editor form. Used on the Presets page and inside PresetEditorWindow (donut right-click / ✎).
+  Only the option groups that apply to the chosen target are shown (image, video & audio, archive, PDF).
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Filee.App.ViewModels"
+             x:Class="Filee.App.Views.PresetEditorView"
+             x:DataType="vm:PresetEditorViewModel">
+  <UserControl.Styles>
+    <!-- Target list: the category sits right-aligned next to each format name. -->
+    <Style Selector="ComboBox.targets ComboBoxItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+  <StackPanel Spacing="14">
+    <!-- Name + target -->
+    <Grid ColumnDefinitions="*,12,*">
+      <StackPanel>
+        <TextBlock Classes="label" Text="{DynamicResource presets.name}" />
+        <TextBox Text="{Binding Name}" />
+        <TextBlock Classes="caption danger" Text="{Binding NameError}" IsVisible="{Binding NameError, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="2,4,0,0" />
+      </StackPanel>
+      <StackPanel Grid.Column="2">
+        <TextBlock Classes="label" Text="{DynamicResource presets.target}" />
+        <ComboBox x:Name="TargetBox" Classes="targets" ItemsSource="{Binding Targets}" SelectedItem="{Binding Target}"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" MaxDropDownHeight="420">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:IChoice">
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Classes="caption" Text="{Binding Detail}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              </DockPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </StackPanel>
+    </Grid>
+
+    <!-- Image options -->
+    <Border Classes="card" IsVisible="{Binding ShowImage}" Padding="14">
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h2" Text="{DynamicResource presets.group.image}" />
+        <StackPanel IsVisible="{Binding ShowQuality}">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Text="{Binding Quality}" FontWeight="SemiBold" />
+            <TextBlock Classes="label" Text="{DynamicResource presets.quality}" />
+          </DockPanel>
+          <Slider Minimum="1" Maximum="100" Value="{Binding Quality}" TickFrequency="1" IsSnapToTickEnabled="True" />
+        </StackPanel>
+        <Grid ColumnDefinitions="*,12,*">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.resize}" />
+            <ComboBox ItemsSource="{Binding ResizeModes}" SelectedItem="{Binding Resize}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" IsVisible="{Binding ShowPercent}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.percent}" />
+            <NumericUpDown Value="{Binding ResizePercent}" Minimum="1" Maximum="1000" Increment="5" FormatString="0" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" IsVisible="{Binding ShowLongEdge}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.long_edge}" />
+            <NumericUpDown Value="{Binding LongEdge}" Minimum="16" Maximum="20000" Increment="100" FormatString="0" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" IsVisible="{Binding ShowWidth}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.width}" />
+            <NumericUpDown Value="{Binding Width}" Minimum="16" Maximum="20000" Increment="100" FormatString="0" />
+          </StackPanel>
+        </Grid>
+        <Grid ColumnDefinitions="*,12,*">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.rotation}" />
+            <ComboBox ItemsSource="{Binding Rotations}" SelectedItem="{Binding Rotation}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <TextBlock Classes="label" Text="{DynamicResource presets.flip}" />
+            <ComboBox ItemsSource="{Binding Flips}" SelectedItem="{Binding Flip}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </Grid>
+        <Grid ColumnDefinitions="Auto,12,*">
+          <CheckBox Content="{DynamicResource presets.dpi}" IsChecked="{Binding SetDpi}" />
+          <NumericUpDown Grid.Column="2" Value="{Binding Dpi}" Minimum="36" Maximum="2400" Increment="50" FormatString="0" IsEnabled="{Binding SetDpi}" />
+        </Grid>
+        <WrapPanel>
+          <CheckBox Content="{DynamicResource presets.keep_metadata}" IsChecked="{Binding KeepMetadata}" Margin="0,0,18,0" />
+          <CheckBox Content="{DynamicResource presets.keep_color_profile}" IsChecked="{Binding ColorProfileChecked}"
+                    IsEnabled="{Binding CanChangeColorProfile}" ToolTip.Tip="{DynamicResource presets.keep_color_profile_hint}" ToolTip.ShowOnDisabled="True" Margin="0,0,18,0" />
+          <CheckBox Content="{DynamicResource presets.grayscale}" IsChecked="{Binding Grayscale}" Margin="0,0,18,0" />
+          <CheckBox Content="{DynamicResource presets.webp_lossless}" IsChecked="{Binding WebpLossless}" IsVisible="{Binding ShowWebp}" />
+        </WrapPanel>
+        <CheckBox Content="{DynamicResource presets.remove_background}" IsChecked="{Binding RemoveBackground}"
+                  ToolTip.Tip="{DynamicResource presets.remove_background_hint}" />
+        <StackPanel Spacing="6" IsVisible="{Binding RemoveBackground}">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Text="{Binding BackgroundTolerance}" FontWeight="SemiBold" />
+            <TextBlock Classes="label" Text="{DynamicResource presets.background_tolerance}" />
+          </DockPanel>
+          <Slider Minimum="0" Maximum="100" Value="{Binding BackgroundTolerance}" TickFrequency="1" IsSnapToTickEnabled="True"
+                  ToolTip.Tip="{DynamicResource presets.background_tolerance_hint}" />
+          <CheckBox Content="{DynamicResource presets.keep_enclosed_background}" IsChecked="{Binding KeepEnclosedBackground}"
+                    ToolTip.Tip="{DynamicResource presets.keep_enclosed_background_hint}" />
+        </StackPanel>
+        <Grid ColumnDefinitions="*,12,*">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.background}" />
+            <TextBox Text="{Binding Background}" PlaceholderText="#FFFFFF" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" IsVisible="{Binding ShowTiff}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.tiff_compression}" />
+            <ComboBox ItemsSource="{Binding TiffCompressions}" SelectedItem="{Binding TiffCompression}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" IsVisible="{Binding ShowIco}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.ico_sizes}" />
+            <TextBox Text="{Binding IcoSizes}" PlaceholderText="256, 64, 48, 32, 16" />
+          </StackPanel>
+        </Grid>
+        <CheckBox Content="{DynamicResource presets.multipage_tiff}" IsChecked="{Binding MultiPageTiff}" IsVisible="{Binding ShowMultiPageTiff}"
+                  ToolTip.Tip="{DynamicResource presets.multipage_tiff_hint}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Video & audio options -->
+    <Border x:Name="MediaCard" Classes="card" IsVisible="{Binding ShowMedia}" Padding="14">
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h2" Text="{DynamicResource presets.group.media}" />
+        <Grid ColumnDefinitions="*,12,*" IsVisible="{Binding ShowMediaQuality}">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.media_quality}" />
+            <ComboBox ItemsSource="{Binding MediaQualities}" SelectedItem="{Binding MediaQuality}" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="{DynamicResource presets.media_quality_hint}" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" IsVisible="{Binding ShowMaxHeight}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.max_height}" />
+            <ComboBox ItemsSource="{Binding MaxHeights}" SelectedItem="{Binding MaxHeight}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </Grid>
+        <!-- Two per row, whichever apply to the target: hidden ones leave no gap. -->
+        <UniformGrid Columns="2" ColumnSpacing="12" RowSpacing="10">
+          <StackPanel IsVisible="{Binding ShowVideoCodec}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.video_codec}" />
+            <ComboBox ItemsSource="{Binding VideoCodecs}" SelectedItem="{Binding VideoCodecChoice}" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="{DynamicResource presets.video_codec_hint}" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding ShowAudioCodec}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.audio_codec}" />
+            <ComboBox ItemsSource="{Binding AudioCodecs}" SelectedItem="{Binding AudioCodecChoice}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding ShowAudioBitrate}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.audio_bitrate}" />
+            <ComboBox ItemsSource="{Binding AudioBitrates}" SelectedItem="{Binding AudioBitrate}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <CheckBox VerticalAlignment="Bottom" Content="{DynamicResource presets.remove_audio}"
+                    IsChecked="{Binding RemoveAudio}" IsVisible="{Binding ShowRemoveAudio}" />
+          <StackPanel IsVisible="{Binding ShowAudioChannels}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.audio_channels}" />
+            <ComboBox ItemsSource="{Binding AudioChannelChoices}" SelectedItem="{Binding AudioChannels}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding ShowWav}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.sample_rate}" />
+            <ComboBox ItemsSource="{Binding SampleRates}" SelectedItem="{Binding SampleRate}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding ShowWav}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.wav_format}" />
+            <ComboBox ItemsSource="{Binding WavFormats}" SelectedItem="{Binding WavFormat}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </UniformGrid>
+      </StackPanel>
+    </Border>
+
+    <!-- Archive options -->
+    <Border x:Name="ArchiveCard" Classes="card" IsVisible="{Binding ShowArchive}" Padding="14">
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h2" Text="{DynamicResource presets.group.archive}" />
+        <Grid ColumnDefinitions="*,12,*" IsVisible="{Binding ShowArchiveOptions}">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.archive_level}" />
+            <ComboBox ItemsSource="{Binding ArchiveLevels}" SelectedItem="{Binding ArchiveLevel}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </Grid>
+        <CheckBox Content="{DynamicResource presets.combine}" IsChecked="{Binding CombineIntoOne}" IsVisible="{Binding ShowArchiveOptions}" />
+        <TextBlock Classes="caption" Text="{DynamicResource presets.extract_note}" TextWrapping="Wrap" IsVisible="{Binding ShowExtractNote}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Tracing options (raster image → SVG, and DXF / DWG through SVG) -->
+    <Border x:Name="TraceCard" Classes="card" IsVisible="{Binding ShowTrace}" Padding="14">
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h2" Text="{DynamicResource presets.group.trace}" />
+        <TextBlock Classes="caption" Text="{DynamicResource presets.trace_note}" TextWrapping="Wrap" />
+        <Grid ColumnDefinitions="*,12,*">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.trace_mode}" />
+            <ComboBox ItemsSource="{Binding TraceModes}" SelectedItem="{Binding TraceMode}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" IsVisible="{Binding ShowTraceColors}">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" Text="{Binding TraceColors}" FontWeight="SemiBold" />
+              <TextBlock Classes="label" Text="{DynamicResource presets.trace_colors}" />
+            </DockPanel>
+            <Slider Minimum="2" Maximum="64" Value="{Binding TraceColors}" TickFrequency="1" IsSnapToTickEnabled="True" />
+          </StackPanel>
+        </Grid>
+        <StackPanel>
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Text="{Binding TraceDetail}" FontWeight="SemiBold" />
+            <TextBlock Classes="label" Text="{DynamicResource presets.trace_detail}" />
+          </DockPanel>
+          <Slider Minimum="0" Maximum="100" Value="{Binding TraceDetail}" TickFrequency="1" IsSnapToTickEnabled="True"
+                  ToolTip.Tip="{DynamicResource presets.trace_detail_hint}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- PDF options (render settings also apply when a PDF is converted to images) -->
+    <Border Classes="card" Padding="14" IsVisible="{Binding ShowPdf}">
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h2" Text="{DynamicResource presets.group.pdf}" />
+        <CheckBox Content="{DynamicResource presets.merge}" IsChecked="{Binding Merge}" IsVisible="{Binding ShowPdfBuild}" />
+        <CheckBox Content="{DynamicResource presets.split}" IsChecked="{Binding SplitPages}" IsVisible="{Binding ShowPdfSplit}" />
+        <StackPanel Spacing="2" IsVisible="{Binding ShowPdfCombine}">
+          <CheckBox Content="{DynamicResource presets.combine_pages}" IsChecked="{Binding CombinePages}" />
+          <TextBlock Classes="caption" TextWrapping="Wrap" Margin="28,0,0,0" Text="{DynamicResource presets.combine_pages_hint}" />
+          <StackPanel Spacing="2" Margin="28,6,0,0" IsVisible="{Binding CombinePages}">
+            <CheckBox Content="{DynamicResource presets.trim_page_margins}" IsChecked="{Binding TrimPageMargins}" />
+            <CheckBox Content="{DynamicResource presets.split_tall_image}" IsChecked="{Binding SplitTallImage}" />
+            <TextBlock Classes="caption" TextWrapping="Wrap" Margin="28,0,0,0" Text="{DynamicResource presets.split_tall_image_hint}" />
+          </StackPanel>
+        </StackPanel>
+        <Grid ColumnDefinitions="*,12,*" IsVisible="{Binding ShowPdfBuild}">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.page_size}" />
+            <ComboBox ItemsSource="{Binding PageSizes}" SelectedItem="{Binding PageSize}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" IsVisible="{Binding ShowMargin}">
+            <TextBlock Classes="label" Text="{DynamicResource presets.margin}" />
+            <NumericUpDown Value="{Binding MarginMm}" Minimum="0" Maximum="100" Increment="1" FormatString="0" />
+          </StackPanel>
+        </Grid>
+        <!-- Pictures placed on the pages are turned too; a PDF target has no image card to show this in -->
+        <Grid ColumnDefinitions="*,12,*" IsVisible="{Binding ShowTurnForPdf}">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.rotation}" />
+            <ComboBox ItemsSource="{Binding Rotations}" SelectedItem="{Binding Rotation}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <TextBlock Classes="label" Text="{DynamicResource presets.flip}" />
+            <ComboBox ItemsSource="{Binding Flips}" SelectedItem="{Binding Flip}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </Grid>
+        <Grid ColumnDefinitions="*,12,*">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.render_dpi}" />
+            <NumericUpDown Value="{Binding RenderDpi}" Minimum="36" Maximum="1200" Increment="25" FormatString="0" />
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <TextBlock Classes="label" Text="{DynamicResource presets.page_range}" />
+            <TextBox Text="{Binding PageRange}" PlaceholderText="{DynamicResource presets.page_range_hint}" />
+          </StackPanel>
+        </Grid>
+        <CheckBox Content="{DynamicResource presets.pdfa}" IsChecked="{Binding PdfA}" IsVisible="{Binding ShowDocument}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Output -->
+    <Border Classes="card" Padding="14">
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h2" Text="{DynamicResource presets.group.output}" />
+        <Grid ColumnDefinitions="*,12,*">
+          <StackPanel>
+            <TextBlock Classes="label" Text="{DynamicResource presets.location}" />
+            <ComboBox ItemsSource="{Binding Locations}" SelectedItem="{Binding Location}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <TextBlock Classes="label" Text="{DynamicResource presets.conflict}" />
+            <ComboBox ItemsSource="{Binding Conflicts}" SelectedItem="{Binding Conflict}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </Grid>
+        <StackPanel IsVisible="{Binding ShowSubfolder}">
+          <TextBlock Classes="label" Text="{DynamicResource presets.subfolder}" />
+          <TextBox Text="{Binding SubfolderName}" PlaceholderText="converted" />
+        </StackPanel>
+        <StackPanel IsVisible="{Binding ShowCustomFolder}">
+          <TextBlock Classes="label" Text="{DynamicResource presets.custom_folder}" />
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Margin="8,0,0,0" Content="{DynamicResource presets.browse}" Click="OnBrowseFolder" />
+            <TextBox Text="{Binding CustomFolder}" />
+          </DockPanel>
+        </StackPanel>
+        <StackPanel>
+          <TextBlock Classes="label" Text="{DynamicResource presets.pattern}" />
+          <TextBox Text="{Binding Pattern}" PlaceholderText="{}{name}" />
+          <TextBlock Classes="caption" Text="{DynamicResource presets.pattern_hint}" Margin="2,4,0,0" />
+        </StackPanel>
+        <CheckBox Content="{DynamicResource presets.keep_dates}" IsChecked="{Binding KeepDates}"
+                  ToolTip.Tip="{DynamicResource presets.keep_dates_hint}" />
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

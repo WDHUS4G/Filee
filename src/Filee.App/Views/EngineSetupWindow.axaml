@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Filee.App.ViewModels"
+        xmlns:svc="using:Filee.App.Services"
+        x:Class="Filee.App.Views.EngineSetupWindow"
+        x:DataType="vm:EngineSetupViewModel"
+        Title="{DynamicResource setup.title}"
+        Width="560" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource SurfaceBrush}">
+  <StackPanel Margin="26,24" Spacing="16">
+    <StackPanel Spacing="6">
+      <TextBlock Classes="h1" Text="{DynamicResource setup.title}" />
+      <TextBlock Classes="muted" TextWrapping="Wrap" Text="{DynamicResource setup.description}" />
+    </StackPanel>
+
+    <ItemsControl ItemsSource="{Binding Packages}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Spacing="10" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="svc:EnginePackageState">
+          <Border Classes="card" Padding="14,12">
+            <DockPanel>
+              <!-- Already installed packages cannot be ticked; ticking is locked once installation started. -->
+              <CheckBox DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,0,10,0"
+                        IsChecked="{Binding Selected}" IsEnabled="{Binding CanInstall}"
+                        IsVisible="{Binding !IsInstalled}" />
+              <PathIcon DockPanel.Dock="Left" VerticalAlignment="Top" Margin="2,3,14,0" Width="14" Height="14"
+                        Data="{StaticResource Icon.Check}" Foreground="{DynamicResource SuccessBrush}" IsVisible="{Binding IsInstalled}" />
+              <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                  <Border Classes="badge">
+                    <TextBlock Classes="caption" Text="{Binding StatusText}" />
+                  </Border>
+                </StackPanel>
+                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{Binding Description}" />
+                <TextBlock Classes="caption" Text="{Binding Sizes}" />
+                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{Binding InstallGuidance}"
+                           IsVisible="{Binding InstallGuidance, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <ProgressBar Classes="soft" Maximum="100" Value="{Binding Progress}" IsVisible="{Binding IsBusy}" Margin="0,4,0,0" />
+                <TextBlock Classes="caption" Text="{Binding ProgressDetail}" IsVisible="{Binding ProgressDetail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              </StackPanel>
+            </DockPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource setup.note}" />
+
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+        <Button Content="{Binding CloseText}" Command="{Binding CloseCommand}" />
+        <Button Classes="accent" Content="{DynamicResource setup.install}" Command="{Binding InstallCommand}" IsVisible="{Binding CanChoose}" />
+      </StackPanel>
+      <TextBlock Classes="muted" VerticalAlignment="Center" Text="{Binding SelectionText}" IsVisible="{Binding CanChoose}" />
+    </DockPanel>
+  </StackPanel>
+</Window>

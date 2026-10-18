@@ -1,0 +1,253 @@
+<!--
+  Filee "soft" look: rounded corners, gentle surfaces, springy press feedback.
+  Colours that depend on light/dark live in ThemeDictionaries below; the accent colour, corner radii and
+  the UI font are written at runtime by ThemeService (so users can customise them).
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:Filee.App.Controls">
+
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="PageBrush" Color="#F6F5F1" />
+          <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="SurfaceAltBrush" Color="#EFEDE6" />
+          <SolidColorBrush x:Key="SubtleBorderBrush" Color="#16000000" />
+          <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1F1E1D" />
+          <SolidColorBrush x:Key="TextSecondaryBrush" Color="#6B6A66" />
+          <SolidColorBrush x:Key="DangerBrush" Color="#C73A39" />
+          <SolidColorBrush x:Key="SuccessBrush" Color="#0F7A5A" />
+          <SolidColorBrush x:Key="WarningBrush" Color="#9A5B0C" />
+          <BoxShadows x:Key="CardShadow">0 1 3 0 #12000000, 0 6 18 0 #0D000000</BoxShadows>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="PageBrush" Color="#1B1B19" />
+          <SolidColorBrush x:Key="SurfaceBrush" Color="#262624" />
+          <SolidColorBrush x:Key="SurfaceAltBrush" Color="#31312E" />
+          <SolidColorBrush x:Key="SubtleBorderBrush" Color="#1CFFFFFF" />
+          <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F1EFE8" />
+          <SolidColorBrush x:Key="TextSecondaryBrush" Color="#AEACA4" />
+          <SolidColorBrush x:Key="DangerBrush" Color="#F09595" />
+          <SolidColorBrush x:Key="SuccessBrush" Color="#5DCAA5" />
+          <SolidColorBrush x:Key="WarningBrush" Color="#EF9F27" />
+          <BoxShadows x:Key="CardShadow">0 1 3 0 #40000000, 0 8 24 0 #33000000</BoxShadows>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
+      <!-- Defaults; ThemeService overwrites these at startup. -->
+      <SolidColorBrush x:Key="AccentBrush" Color="#7F77DD" />
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="#2E7F77DD" />
+      <SolidColorBrush x:Key="AccentFaintBrush" Color="#177F77DD" />
+      <SolidColorBrush x:Key="AccentStrongBrush" Color="#5F59A6" />
+      <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
+      <CornerRadius x:Key="SoftRadius">16</CornerRadius>
+      <CornerRadius x:Key="SoftRadiusSmall">9</CornerRadius>
+      <CornerRadius x:Key="SoftRadiusLarge">22</CornerRadius>
+      <FontFamily x:Key="AppFontFamily">Segoe UI, Malgun Gothic, Microsoft YaHei, sans-serif</FontFamily>
+
+      <!-- Springy easing used by press/hover transitions ("말랑말랑"). -->
+      <BackEaseOut x:Key="SoftEase" />
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- ───────── Windows & typography ───────── -->
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource PageBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="24" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+  <Style Selector="TextBlock.danger">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+
+  <!-- ───────── Cards ───────── -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadius}" />
+    <Setter Property="Padding" Value="18,16" />
+    <Setter Property="BoxShadow" Value="{DynamicResource CardShadow}" />
+  </Style>
+
+  <Style Selector="Border.chip">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="10,5" />
+    <Setter Property="Margin" Value="3" />
+    <Setter Property="Cursor" Value="SizeAll" />
+    <Setter Property="RenderTransform" Value="none" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25" Easing="{StaticResource SoftEase}" />
+        <BrushTransition Property="Background" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.chip:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentFaintBrush}" />
+    <Setter Property="RenderTransform" Value="scale(1.05)" />
+  </Style>
+
+  <!-- Badge for engine status etc. -->
+  <Style Selector="Border.badge">
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+  </Style>
+  <Style Selector="Border.badge.ok">
+    <Setter Property="Background" Value="{DynamicResource AccentFaintBrush}" />
+  </Style>
+
+  <!-- ───────── Buttons: soft corners and a springy press ───────── -->
+  <Style Selector="Button, ToggleButton, RepeatButton">
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusSmall}" />
+    <Setter Property="Padding" Value="14,7" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.22" Easing="{StaticResource SoftEase}" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button:pressed, ToggleButton:pressed">
+    <Setter Property="RenderTransform" Value="scale(0.95)" />
+  </Style>
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <!-- Small links at the bottom of the navigation (GitHub, Sponsor) -->
+  <Style Selector="Button.navlink">
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.icon">
+    <Setter Property="Padding" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ProgressBar.soft">
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="MinHeight" Value="6" />
+    <Setter Property="Height" Value="6" />
+  </Style>
+
+  <Style Selector="TextBox, ComboBox, NumericUpDown">
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusSmall}" />
+  </Style>
+
+  <!-- ───────── Navigation list ───────── -->
+  <Style Selector="ListBox.nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem">
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusSmall}" />
+    <Setter Property="Padding" Value="12,9" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="RenderTransform" Value="none" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25" Easing="{StaticResource SoftEase}" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:pointerover">
+    <Setter Property="RenderTransform" Value="translateX(3px)" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+  </Style>
+
+  <!-- Generic rounded list items (profiles, presets) -->
+  <Style Selector="ListBox.soft">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.soft ListBoxItem">
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusSmall}" />
+    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="Margin" Value="0,1" />
+  </Style>
+  <Style Selector="ListBox.soft ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+  </Style>
+
+  <!-- ───────── Donut control colours ───────── -->
+  <Style Selector="c|DonutMenu">
+    <Setter Property="SliceBrush" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="SliceBorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+    <Setter Property="CenterBrush" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="AccentBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="OnAccentBrush" Value="{DynamicResource OnAccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="SecondaryForeground" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="DangerBrush" Value="{DynamicResource DangerBrush}" />
+    <Setter Property="SuccessBrush" Value="{DynamicResource SuccessBrush}" />
+  </Style>
+
+  <!-- ───────── Page content fade-in (keyframes can't animate RenderTransform, so Margin slides) ───────── -->
+  <Style Selector="ContentControl.page > :is(Control)">
+    <Style.Animations>
+      <Animation Duration="0:0:0.28" Easing="CubicEaseOut" FillMode="Forward">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="Margin" Value="0,10,0,-10" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="1" />
+          <Setter Property="Margin" Value="0" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <!-- ───────── Reduced motion: remove every transition and animation above ───────── -->
+  <Style Selector="Window.reduced-motion :is(Button), Window.reduced-motion :is(ToggleButton), Window.reduced-motion Border.chip, Window.reduced-motion ListBoxItem">
+    <Setter Property="Transitions" Value="{x:Null}" />
+  </Style>
+  <Style Selector="Window.reduced-motion Button:pressed, Window.reduced-motion ToggleButton:pressed, Window.reduced-motion Border.chip:pointerover, Window.reduced-motion ListBox.nav ListBoxItem:pointerover">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+  <Style Selector="Window.reduced-motion ContentControl.page > :is(Control)">
+    <Style.Animations>
+      <Animation Duration="0:0:0.001" FillMode="Forward">
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="1" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+</Styles>

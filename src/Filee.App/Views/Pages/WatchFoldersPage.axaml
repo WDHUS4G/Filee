@@ -1,0 +1,170 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Filee.App.ViewModels.Pages"
+             xmlns:c="using:Filee.App.Controls"
+             xmlns:app="using:Filee.App.ViewModels"
+             x:Class="Filee.App.Views.Pages.WatchFoldersPage"
+             x:DataType="vm:WatchFoldersPageViewModel">
+  <UserControl.Styles>
+    <Style Selector="PathIcon.chevron">
+      <Setter Property="RenderTransform" Value="rotate(0deg)" />
+    </Style>
+    <Style Selector="PathIcon.chevron.open">
+      <Setter Property="RenderTransform" Value="rotate(90deg)" />
+    </Style>
+  </UserControl.Styles>
+  <StackPanel Spacing="18">
+    <TextBlock Classes="h1" Text="{DynamicResource watch.title}" />
+    <TextBlock Classes="muted" TextWrapping="Wrap" Text="{DynamicResource watch.description}" />
+
+    <Button Classes="accent" Command="{Binding AddCommand}" HorizontalAlignment="Left">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Plus}" />
+        <TextBlock Text="{DynamicResource watch.add}" />
+      </StackPanel>
+    </Button>
+
+    <TextBlock Classes="muted" Text="{DynamicResource watch.empty}" IsVisible="{Binding IsEmpty}" />
+
+    <ItemsControl ItemsSource="{Binding Rules}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Spacing="14" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:WatchRuleViewModel">
+          <Border Classes="card">
+            <StackPanel Spacing="12">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Command="{Binding RemoveCommand}" ToolTip.Tip="{DynamicResource watch.remove}">
+                  <PathIcon Width="14" Height="14" Data="{StaticResource Icon.Delete}" />
+                </Button>
+                <ToggleSwitch IsChecked="{Binding Enabled}" OnContent="{DynamicResource watch.enabled}" OffContent="{DynamicResource watch.enabled}" />
+                <TextBlock Classes="muted" VerticalAlignment="Center" Margin="12,0" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
+              </DockPanel>
+
+              <StackPanel Spacing="4">
+                <TextBlock Classes="label" Text="{DynamicResource watch.folder}" />
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Margin="8,0,0,0" Content="{DynamicResource presets.browse}" Click="OnBrowseFolder" />
+                  <TextBox Text="{Binding Folder}" PlaceholderText="{DynamicResource watch.folder_placeholder}" />
+                </DockPanel>
+              </StackPanel>
+
+              <Grid ColumnDefinitions="*,16,*">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="label" Text="{DynamicResource watch.preset}" />
+                  <ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding Preset}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4">
+                  <TextBlock Classes="label" Text="{DynamicResource watch.originals}" />
+                  <ComboBox ItemsSource="{Binding OriginalsChoices}" SelectedItem="{Binding Originals}" HorizontalAlignment="Stretch"
+                            ToolTip.Tip="{DynamicResource watch.originals_hint}" />
+                </StackPanel>
+              </Grid>
+
+              <StackPanel Spacing="4">
+                <TextBlock Classes="label" Text="{DynamicResource watch.output}" />
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Margin="8,0,0,0" Content="{DynamicResource presets.browse}" Click="OnBrowseOutput" />
+                  <TextBox Text="{Binding OutputFolder}" PlaceholderText="{DynamicResource watch.output_placeholder}" />
+                </DockPanel>
+              </StackPanel>
+
+              <CheckBox Content="{DynamicResource watch.subfolders}" IsChecked="{Binding IncludeSubfolders}" />
+
+              <!-- Optional: which files, and how converted files are named. Empty fields change nothing. -->
+              <Button Classes="ghost" Command="{Binding ToggleOptionsCommand}" Padding="6,4" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Classes="chevron" Classes.open="{Binding ShowOptions}" Width="12" Height="12" Data="{StaticResource Icon.ChevronRight}" />
+                  <TextBlock Text="{DynamicResource watch.options}" />
+                </StackPanel>
+              </Button>
+              <StackPanel Spacing="12" IsVisible="{Binding ShowOptions}" Margin="8,0,0,0">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="label" Text="{DynamicResource watch.include}" />
+                  <!-- Only ";" separates: patterns and regular expressions may contain spaces and commas -->
+                  <c:TagEditor Tags="{Binding IncludeTags}" Suggestions="{Binding IncludeSuggestions}" Text="{Binding IncludeText}"
+                               AddCommand="{Binding AddIncludeCommand}" RemoveCommand="{Binding RemoveIncludeCommand}"
+                               Separators=";" PlaceholderText="{DynamicResource watch.include_placeholder}" />
+                  <TextBlock Classes="caption danger" Text="{Binding IncludeError}" TextWrapping="Wrap" IsVisible="{Binding IncludeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  <TextBlock Classes="caption" Text="{Binding IncludeMatches}" TextWrapping="Wrap" IsVisible="{Binding IncludeMatches, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  <TextBlock Classes="caption" Text="{DynamicResource watch.include_hint}" TextWrapping="Wrap" />
+                </StackPanel>
+                <!-- The base name and the rules in short; both are edited in their own window -->
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="label" Text="{DynamicResource watch.rename}" />
+                  <TextBlock Classes="caption" Text="{Binding NameSummary}" TextWrapping="Wrap" />
+                  <ItemsControl ItemsSource="{Binding RenameSummary}" IsVisible="{Binding HasRenames}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <TextBlock Classes="caption" Text="{Binding StringFormat='· {0}'}" TextTrimming="CharacterEllipsis" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Button HorizontalAlignment="Left" Padding="10,5" Margin="0,2,0,0" Click="OnEditRenames">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Pencil}" />
+                      <TextBlock Text="{DynamicResource watch.rename_edit}" />
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+              </StackPanel>
+
+              <!-- A converted file as it would be saved -->
+              <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="8" Padding="12,10" IsVisible="{Binding HasPreview}">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="label" Text="{DynamicResource watch.preview}" />
+                  <SelectableTextBlock FontWeight="SemiBold" Text="{Binding PreviewExample}" TextWrapping="Wrap" />
+                  <TextBlock Classes="caption" Text="{Binding PreviewDetails}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+
+              <!-- What the folder converted lately; failed files with the reason, and converting them again -->
+              <Border BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12,10" IsVisible="{Binding HasResults}">
+                <StackPanel Spacing="6">
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Command="{Binding RetryResultsCommand}" IsVisible="{Binding CanRetryResults}" Padding="10,5">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Refresh}" />
+                        <TextBlock Text="{DynamicResource common.retry}" />
+                      </StackPanel>
+                    </Button>
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                      <TextBlock Classes="label" Text="{DynamicResource watch.results}" />
+                      <TextBlock Text="{Binding ResultsSummary}" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </DockPanel>
+                  <Button Classes="ghost" Command="{Binding ToggleResultFailuresCommand}" Padding="6,4" HorizontalAlignment="Left" IsVisible="{Binding HasResultFailures}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Classes="chevron" Classes.open="{Binding ShowResultFailures}" Width="12" Height="12" Data="{StaticResource Icon.ChevronRight}" />
+                      <TextBlock Classes="caption danger" Text="{Binding ResultFailuresLabel}" />
+                    </StackPanel>
+                  </Button>
+                  <ItemsControl ItemsSource="{Binding ResultFailures}" IsVisible="{Binding ShowResultFailures}" Margin="24,0,0,0">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="4" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="app:FailureItem">
+                        <StackPanel>
+                          <SelectableTextBlock Classes="caption" FontWeight="SemiBold" Text="{Binding Name}" TextWrapping="Wrap" />
+                          <SelectableTextBlock Classes="caption" Text="{Binding Reason}" TextWrapping="Wrap" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource watch.cli_hint}" />
+  </StackPanel>
+</UserControl>

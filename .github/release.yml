@@ -1,0 +1,33 @@
+# Categories of the automatically generated release notes ("What's Changed").
+# GitHub lists every pull request merged since the previous release under the first category whose label it has,
+# credits its author, and adds a "New Contributors" section and the full changelog link.
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: New formats and engines
+      labels:
+        - formats
+        - engine
+    - title: New features
+      labels:
+        - feature
+        - enhancement
+    - title: Fixes
+      labels:
+        - bug
+        - fix
+    - title: Website and documentation
+      labels:
+        - documentation
+        - website
+    - title: Build and maintenance
+      labels:
+        - build
+        - ci
+        - dependencies
+        - chore
+    - title: Other changes
+      labels:
+        - "*"

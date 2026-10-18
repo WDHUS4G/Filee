@@ -1,0 +1,101 @@
+# Build, test and style check on every push and pull request.
+name: CI
+
+# Changes to documentation only (Markdown, docs/) skip the build and tests.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**']
+  pull_request:
+    paths-ignore: ['**/*.md', 'docs/**']
+
+permissions:
+  contents: read
+
+# One run per branch or pull request: a newer push cancels the run it replaces.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable:
+    uses: ./.github/workflows/portable.yml
+
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Filee.slnx
+
+      - name: Check formatting
+        run: dotnet format Filee.slnx --verify-no-changes --no-restore --severity warn
+
+      # The release embeds the Noto fonts, so the tests run with them here too: the headless UI tests load them.
+      - name: Fonts
+        shell: pwsh
+        run: ./build/fetch-fonts.ps1
+
+      - name: Build
+        run: dotnet build Filee.slnx --no-restore -c Release
+
+      # Windows 11 Explorer menu (native DLL + unsigned sparse package); its tests load the DLL in-process.
+      # The toolchain (~100 MB) is saved right after it is downloaded, even if a later step fails, so it is
+      # downloaded once and not on every run. Release builds restore the same cache.
+      - name: Restore Zig toolchain
+        id: zig
+        uses: actions/cache/restore@v4
+        with:
+          path: build/.cache/zig-x86_64-windows-0.16.0
+          key: zig-0.16.0-x86_64-windows
+
+      - name: Build Explorer menu extension
+        shell: pwsh
+        run: ./build/build-explorer-menu.ps1
+
+      - name: Save Zig toolchain
+        if: steps.zig.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/.cache/zig-x86_64-windows-0.16.0
+          key: zig-0.16.0-x86_64-windows
+
+      # rhwp, Pandoc and 7-Zip are small; with them the HWP/HWPX and archive engine tests run too (LibreOffice is
+      # skipped to save time).
+      - name: Fetch rhwp, Pandoc and 7-Zip for engine tests
+        shell: pwsh
+        run: ./build/fetch-engines.ps1 -Only rhwp,pandoc,7zip
+
+      # The UI tests on their own first, as the release runs them (there they crashed with 0xC0000005): a crash
+      # names the test that was running and leaves a dump in TestResults.
+      - name: Test UI on its own
+        run: dotnet test tests/Filee.App.Tests --no-build -c Release --blame-crash --blame-hang-timeout 5m --logger "console;verbosity=normal" --results-directory TestResults/app
+
+      - name: Test
+        run: dotnet test Filee.slnx --no-build -c Release --filter "FullyQualifiedName!~Filee.App.Tests" --logger "trx" --results-directory TestResults
+
+      # Compiles installer/Filee.iss against a stub app without compression: catches script errors in about a minute.
+      - name: Check installer script
+        shell: pwsh
+        run: ./build/build-installer.ps1 -CheckOnly
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-windows
+          path: TestResults/
+          if-no-files-found: ignore
+
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: tests/Filee.App.Tests/bin/Release/net10.0/screenshots/
+          if-no-files-found: ignore

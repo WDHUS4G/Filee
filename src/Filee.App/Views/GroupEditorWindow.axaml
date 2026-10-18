@@ -1,0 +1,104 @@
+<!-- Group editor: the name of a donut group and the presets its slice fans out (Settings → Toolbar → New group,
+     or right-click / ✎ on a group). -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Filee.App.ViewModels"
+        x:Class="Filee.App.Views.GroupEditorWindow"
+        x:DataType="vm:GroupEditorViewModel"
+        Title="{DynamicResource group.editor_title}"
+        Icon="avares://Filee/Assets/Icons/filee.ico"
+        Width="480" Height="560" MinWidth="400" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="20,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SubtleBorderBrush}"
+            Background="{DynamicResource SurfaceBrush}">
+      <DockPanel>
+        <Button x:Name="DeleteButton" DockPanel.Dock="Left" Classes="ghost" Content="{DynamicResource group.delete}" Click="OnDelete"
+                IsVisible="{Binding CanDelete}" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+          <Button Content="{DynamicResource common.cancel}" Click="OnCancel" IsCancel="True" />
+          <Button Classes="accent" Content="{DynamicResource common.save}" Click="OnSave" IsDefault="True" IsEnabled="{Binding IsValid}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+    <ScrollViewer Padding="20,16">
+      <StackPanel Spacing="14">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Border Width="34" Height="34" CornerRadius="999" Background="{DynamicResource AccentSoftBrush}">
+            <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Donut}" Foreground="{DynamicResource AccentStrongBrush}" />
+          </Border>
+          <TextBlock Classes="h2" VerticalAlignment="Center" Text="{DynamicResource group.editor_title}" />
+        </StackPanel>
+        <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource group.hint}" />
+
+        <StackPanel>
+          <TextBlock Classes="label" Text="{DynamicResource presets.name}" />
+          <TextBox x:Name="NameBox" Text="{Binding Name}" />
+          <TextBlock Classes="caption danger" Text="{Binding NameError}" Margin="2,4,0,0"
+                     IsVisible="{Binding NameError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+
+        <Border Classes="card" Padding="14">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="h2" Text="{Binding MembersTitle}" />
+            <TextBlock Classes="caption" Text="{DynamicResource group.empty}" IsVisible="{Binding IsEmpty}" />
+            <ItemsControl ItemsSource="{Binding Members}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="4" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:GroupMember">
+                  <Border Classes="chip" HorizontalAlignment="Stretch">
+                    <DockPanel>
+                      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2">
+                        <Button Classes="icon" ToolTip.Tip="{DynamicResource group.move_up}"
+                                Command="{Binding $parent[ItemsControl].((vm:GroupEditorViewModel)DataContext).MoveUpCommand}" CommandParameter="{Binding}">
+                          <PathIcon Width="12" Height="12" Data="{StaticResource Icon.ArrowUp}" />
+                        </Button>
+                        <Button Classes="icon" ToolTip.Tip="{DynamicResource group.move_down}"
+                                Command="{Binding $parent[ItemsControl].((vm:GroupEditorViewModel)DataContext).MoveDownCommand}" CommandParameter="{Binding}">
+                          <PathIcon Width="12" Height="12" Data="{StaticResource Icon.ArrowDown}" />
+                        </Button>
+                        <Button Classes="icon" ToolTip.Tip="{DynamicResource group.remove}"
+                                Command="{Binding $parent[ItemsControl].((vm:GroupEditorViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}">
+                          <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
+                        </Button>
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                        <TextBlock Classes="caption" Text="{Binding Caption}" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Grid ColumnDefinitions="*,8,Auto" IsVisible="{Binding !IsFull}">
+              <ComboBox x:Name="AddBox" ItemsSource="{Binding Available}" SelectedItem="{Binding ToAdd}" HorizontalAlignment="Stretch"
+                        PlaceholderText="{DynamicResource group.add_placeholder}" MaxDropDownHeight="360">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:IChoice">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Classes="caption" Text="{Binding Detail}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    </DockPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Grid.Column="2" Command="{Binding AddCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Plus}" />
+                  <TextBlock Text="{DynamicResource group.add}" />
+                </StackPanel>
+              </Button>
+            </Grid>
+            <TextBlock Classes="caption" Text="{Binding FullNote}" IsVisible="{Binding IsFull}" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

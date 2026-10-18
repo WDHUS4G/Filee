@@ -1,0 +1,79 @@
+<!-- Main window = settings: navigation on the left, current page on the right. Closing hides to the tray. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Filee.App.ViewModels"
+        x:Class="Filee.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Filee"
+        Icon="avares://Filee/Assets/Icons/filee.ico"
+        Width="1080" Height="760" MinWidth="820" MinHeight="560"
+        WindowStartupLocation="CenterScreen">
+  <Grid ColumnDefinitions="230,*">
+    <!-- Navigation -->
+    <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,0,1,0">
+      <DockPanel Margin="14,18">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="8,0,0,20">
+          <Image Source="avares://Filee/Assets/Icons/filee.png" Width="30" Height="30" />
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="Filee" FontSize="18" FontWeight="Bold" />
+            <TextBlock Classes="caption" Text="{DynamicResource app.tagline}" />
+          </StackPanel>
+        </StackPanel>
+        <!-- Bottom: the running version, and a download button when a newer release is out. -->
+        <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="4,12,4,0">
+          <!-- Accent for required and recommended updates, plain for optional ones; a pill says which -->
+          <Button x:Name="UpdateButton" Classes.accent="{Binding !Updates.IsOptional}" HorizontalAlignment="Stretch"
+                  HorizontalContentAlignment="Stretch"
+                  Command="{Binding DownloadUpdateCommand}" IsVisible="{Binding Updates.IsUpdateAvailable}"
+                  ToolTip.Tip="{Binding UpdateTip}">
+            <DockPanel>
+              <Border DockPanel.Dock="Right" CornerRadius="999" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                      Background="{DynamicResource DangerBrush}" IsVisible="{Binding Updates.IsRequired}">
+                <TextBlock Text="{DynamicResource update.pill.Required}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+              </Border>
+              <Border DockPanel.Dock="Right" CornerRadius="999" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                      Background="{DynamicResource SurfaceAltBrush}" IsVisible="{Binding Updates.IsOptional}">
+                <TextBlock Classes="caption" Text="{DynamicResource update.pill.Optional}" FontSize="11" />
+              </Border>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Width="14" Height="14" Data="{StaticResource Icon.Download}" />
+                <TextBlock Text="{Binding UpdateText}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </DockPanel>
+          </Button>
+          <!-- The project on GitHub, and sponsoring it -->
+          <Grid ColumnDefinitions="*,6,*">
+            <Button Classes="navlink" HorizontalAlignment="Stretch" Click="OnOpenGitHub" ToolTip.Tip="{Binding RepositoryUrl}">
+              <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                <PathIcon Width="13" Height="13" Data="{StaticResource Icon.GitHub}" />
+                <TextBlock Text="GitHub" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Classes="navlink" HorizontalAlignment="Stretch" Click="OnSponsor">
+              <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Heart}" Foreground="#D4537E" />
+                <TextBlock Text="{DynamicResource about.sponsor}" />
+              </StackPanel>
+            </Button>
+          </Grid>
+          <TextBlock x:Name="VersionLabel" Classes="caption" Margin="8,0,0,0" Text="{Binding VersionText}" />
+        </StackPanel>
+        <ListBox Classes="nav" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:NavItem">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <PathIcon Width="17" Height="17" Data="{Binding Icon}" />
+                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+
+    <!-- Page -->
+    <ScrollViewer Grid.Column="1" x:Name="PageScroller" VerticalScrollBarVisibility="{Binding PageScroll}">
+      <ContentControl Classes="page" Content="{Binding CurrentPage}" Margin="32,26,32,32" MaxWidth="980" HorizontalAlignment="Stretch" />
+    </ScrollViewer>
+  </Grid>
+</Window>

@@ -1,0 +1,172 @@
+<!--
+  Look of the chip input (Controls/TagEditor.cs): a box drawn like a Fluent TextBox (same brushes for rest, hover and
+  focus) holding rounded chips, a borderless text box and an autocomplete list in the window's overlay layer.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:Filee.App.Controls">
+
+  <Styles.Resources>
+    <ControlTheme x:Key="{x:Type c:TagEditor}" TargetType="c:TagEditor">
+      <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource TextControlBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusSmall}" />
+      <!-- Includes the 1px frame (drawn underneath, see PART_Frame). -->
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="Cursor" Value="IBeam" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Panel>
+            <!-- Drawn separately from the content so the thicker focus border doesn't shift the chips. -->
+            <Border Name="PART_Frame"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{TemplateBinding CornerRadius}" />
+            <WrapPanel Margin="{TemplateBinding Padding}" MinHeight="30">
+              <ItemsControl Name="PART_Chips" ItemsSource="{TemplateBinding Tags}"
+                            KeyboardNavigation.TabNavigation="None" Cursor="Arrow">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="c:TagChip">
+                    <Border Classes="tagchip" Classes.warning="{Binding IsWarning}" Classes.muted="{Binding IsMuted}"
+                            Focusable="True" ToolTip.Tip="{Binding ToolTip}"
+                            AutomationProperties.Name="{Binding Text}" AutomationProperties.HelpText="{Binding ToolTip}">
+                      <StackPanel Orientation="Horizontal" Spacing="3">
+                        <PathIcon Classes="tagchip-flag" Data="{StaticResource Icon.Alert}" IsVisible="{Binding IsWarning}" />
+                        <TextBlock Classes="tagchip-text" Text="{Binding Text}" />
+                        <Button Classes="tagchip-remove" Focusable="False" ToolTip.Tip="{DynamicResource tags.remove}">
+                          <PathIcon Width="8" Height="8" Data="{StaticResource Icon.Close}" />
+                        </Button>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBox Name="PART_Input" Classes="bare"
+                       Text="{TemplateBinding Text, Mode=TwoWay}"
+                       PlaceholderText="{TemplateBinding PlaceholderText}"
+                       AcceptsReturn="True" TextWrapping="NoWrap" MinWidth="150" />
+            </WrapPanel>
+
+            <Popup Name="PART_Popup" PlacementTarget="{Binding #PART_Frame}" Placement="BottomEdgeAlignedLeft"
+                   VerticalOffset="4" ShouldUseOverlayLayer="True" IsLightDismissEnabled="False">
+              <Border Classes="tag-popup">
+                <ListBox Name="PART_Suggestions" Classes="soft tag-suggestions" ItemsSource="{TemplateBinding Suggestions}"
+                         Focusable="False" MaxHeight="260">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="c:TagSuggestion">
+                      <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Classes="caption tag-suggestion-note" Text="{Binding Note}"
+                                   Margin="12,0,0,0" VerticalAlignment="Center" />
+                        <TextBlock DockPanel.Dock="Left" Text="{Binding Text}" FontWeight="SemiBold" MinWidth="64" VerticalAlignment="Center" />
+                        <TextBlock Classes="caption" Text="{Binding Detail}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      </DockPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Border>
+            </Popup>
+          </Panel>
+        </ControlTemplate>
+      </Setter>
+
+      <Style Selector="^:pointerover /template/ Border#PART_Frame">
+        <Setter Property="BorderBrush" Value="{DynamicResource TextControlBorderBrushPointerOver}" />
+      </Style>
+      <Style Selector="^:focus-within /template/ Border#PART_Frame">
+        <Setter Property="Background" Value="{DynamicResource TextControlBackgroundFocused}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource TextControlBorderBrushFocused}" />
+        <Setter Property="BorderThickness" Value="{DynamicResource TextControlBorderThemeThicknessFocused}" />
+      </Style>
+    </ControlTheme>
+  </Styles.Resources>
+
+  <!-- The text box inside the chip box: no frame of its own. -->
+  <Style Selector="TextBox.bare">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="7,4,4,4" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBox.bare /template/ Border#PART_BorderElement, TextBox.bare:pointerover /template/ Border#PART_BorderElement, TextBox.bare:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- Chips -->
+  <Style Selector="Border.tagchip">
+    <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="9,1,2,1" />
+    <Setter Property="Margin" Value="2" />
+    <Setter Property="MinHeight" Value="26" />
+  </Style>
+  <Style Selector="Border.tagchip:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+  </Style>
+  <Style Selector="Border.tagchip.warning">
+    <Setter Property="Padding" Value="6,1,2,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+  </Style>
+  <Style Selector="Border.tagchip.muted">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextControlBorderBrush}" />
+  </Style>
+  <Style Selector="Border.tagchip TextBlock.tagchip-text">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.tagchip.muted TextBlock.tagchip-text">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="FontStyle" Value="Italic" />
+  </Style>
+  <Style Selector="PathIcon.tagchip-flag">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.tagchip-remove">
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+  <Style Selector="Button.tagchip-remove:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- Suggestions -->
+  <Style Selector="Border.tag-popup">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusSmall}" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="BoxShadow" Value="{DynamicResource CardShadow}" />
+    <Setter Property="Margin" Value="0,0,12,12" />
+  </Style>
+  <Style Selector="ListBox.tag-suggestions ListBoxItem">
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="TextBlock.tag-suggestion-note">
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+  </Style>
+</Styles>

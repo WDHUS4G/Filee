@@ -1,0 +1,22 @@
+* text=auto
+
+*.cs      text diff=csharp
+*.axaml   text
+*.json    text
+*.md      text
+*.ps1     text eol=crlf
+*.sh      text eol=lf
+*.plist   text eol=lf
+
+*.ttf     binary
+*.otf     binary
+*.woff    binary
+*.woff2   binary
+*.eot     binary
+*.ico     binary
+*.png     binary
+*.jpg     binary
+*.pdf     binary
+*.docx    binary
+*.hwpx    binary
+*.hwp     binary

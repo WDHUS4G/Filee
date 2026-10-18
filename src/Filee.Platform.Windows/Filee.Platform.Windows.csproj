@@ -1,0 +1,16 @@
+<!--
+  Filee.Platform.Windows: Windows implementation of IPlatformServices
+  (Explorer detection & selection, context menu, auto-start, system metrics).
+  Targets plain net10.0 so the cross-platform app can reference it; every entry point is guarded
+  with [SupportedOSPlatform("windows")] and only used when OperatingSystem.IsWindows() is true.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Filee.Platform.Windows</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Filee.Core\Filee.Core.csproj" />
+  </ItemGroup>
+</Project>

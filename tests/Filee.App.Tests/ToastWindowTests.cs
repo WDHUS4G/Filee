@@ -1,0 +1,65 @@
+// The bottom-right progress cards: one card per job.
+
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Filee.App.Services;
+using Filee.App.ViewModels;
+using Filee.App.Views;
+using Filee.Core.Conversion;
+using Filee.Core.Localization;
+using Filee.Core.Platform;
+using Filee.Core.Presets;
+
+namespace Filee.App.Tests;
+
+public class ToastWindowTests
+{
+    [AvaloniaFact]
+    public void A_job_handed_to_the_hidden_toast_gets_one_card()
+    {
+        // Issue #60: a large file's ring handed its job to the toast, which showed two identical cards.
+        TestServices.EnsureInitialized("en");
+        var service = AppHost.Get<ConversionService>();
+        service.ToastJobs.Clear();
+        var toast = new ToastWindow { DataContext = service };
+        try
+        {
+            for (var round = 0; round < 3; round++)
+            {
+                var job = new JobViewModel(new ConversionJob(["C:/clip.mp4"], new Preset { TargetFormat = "mp4" }, "MP4"),
+                    AppHost.Get<ILocalizer>(), AppHost.Get<IPlatformServices>(), _ => { });
+                service.Jobs.Insert(0, job);
+                service.ShowInToast(job);
+                Pump();
+                Assert.True(toast.IsVisible);
+                Assert.Equal(1, Cards(toast));
+
+                service.ToastJobs.Remove(job);
+                service.Jobs.Remove(job);
+                Pump();
+                Assert.False(toast.IsVisible);
+                Assert.Equal(0, Cards(toast));
+            }
+        }
+        finally
+        {
+            service.ToastJobs.Clear();
+            toast.Close();
+        }
+    }
+
+    private static int Cards(ToastWindow toast) =>
+        toast.GetVisualDescendants().OfType<ItemsControl>().Single(c => c.Name == "Jobs").ItemsPanelRoot?.Children.Count ?? 0;
+
+    private static void Pump()
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        }
+    }
+}

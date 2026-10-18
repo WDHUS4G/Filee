@@ -1,0 +1,36 @@
+<!-- "Is Filee helping you?" card in the bottom-right corner, shown once after a few successful conversions
+     (ConversionService.FeedbackDue): a star or an issue on GitHub. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Filee.App.Views.FeedbackNoticeWindow"
+        Title="Filee"
+        Width="360"
+        SizeToContent="Height"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        CanResize="False">
+  <Border Classes="card" Margin="12" Padding="16,14">
+    <DockPanel>
+      <Image DockPanel.Dock="Left" Source="avares://Filee/Assets/Icons/filee.png" Width="36" Height="36"
+             VerticalAlignment="Top" Margin="0,2,12,0" />
+      <StackPanel Spacing="8">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="icon" Padding="4" VerticalAlignment="Top" Click="OnClose">
+            <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
+          </Button>
+          <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"
+                     Text="{DynamicResource feedback.notice_title}" />
+        </DockPanel>
+        <TextBlock Classes="caption" Text="{DynamicResource feedback.notice_text}" TextWrapping="Wrap" />
+        <WrapPanel Margin="0,2,0,0">
+          <Button Classes="accent" Click="OnStar" Padding="12,5" Margin="0,0,8,6" Content="{DynamicResource feedback.star}" />
+          <Button Click="OnIssue" Padding="12,5" Margin="0,0,8,6" Content="{DynamicResource feedback.issue}" />
+        </WrapPanel>
+      </StackPanel>
+    </DockPanel>
+  </Border>
+</Window>

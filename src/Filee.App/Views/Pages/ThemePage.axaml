@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Filee.App.ViewModels.Pages"
+             xmlns:c="using:Filee.App.Controls"
+             x:Class="Filee.App.Views.Pages.ThemePage"
+             x:DataType="vm:ThemePageViewModel">
+  <Grid ColumnDefinitions="*,20,340" RowDefinitions="Auto,*">
+    <TextBlock Grid.ColumnSpan="3" Classes="h1" Text="{DynamicResource theme.title}" Margin="0,0,0,18" />
+
+    <StackPanel Grid.Row="1" Spacing="16">
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="label" Text="{DynamicResource theme.mode}" />
+          <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" MinWidth="220" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="label" Text="{DynamicResource theme.accent}" />
+          <ItemsControl ItemsSource="{Binding Swatches}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="Color">
+                <Button Width="34" Height="34" Margin="0,0,8,8" CornerRadius="999" Padding="0"
+                        Command="{Binding $parent[ItemsControl].((vm:ThemePageViewModel)DataContext).PickSwatchCommand}"
+                        CommandParameter="{Binding}">
+                  <Button.Background>
+                    <SolidColorBrush Color="{Binding}" />
+                  </Button.Background>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Border Width="34" Height="34" CornerRadius="999" Background="{Binding AccentBrush}" />
+            <TextBlock Classes="label" VerticalAlignment="Center" Text="{DynamicResource theme.custom_color}" Margin="0" />
+            <TextBox Text="{Binding AccentHex}" Width="120" PlaceholderText="#7F77DD" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" FontWeight="SemiBold" Text="{Binding CornerRadius, StringFormat={}{0:0}}" />
+            <TextBlock Classes="label" Text="{DynamicResource theme.corner_radius}" />
+          </DockPanel>
+          <Slider Minimum="0" Maximum="28" Value="{Binding CornerRadius}" TickFrequency="1" IsSnapToTickEnabled="True" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="4">
+          <CheckBox Content="{DynamicResource theme.reduce_motion}" IsChecked="{Binding ReduceMotion}" FontWeight="SemiBold" />
+          <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource theme.reduce_motion_hint}" Margin="28,0,0,0" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <!-- Live preview -->
+    <Border Grid.Row="1" Grid.Column="2" Classes="card" VerticalAlignment="Top">
+      <StackPanel Spacing="14">
+        <TextBlock Classes="label" Text="{DynamicResource theme.preview}" />
+        <c:DonutMenu x:Name="PreviewDonut" Items="{Binding PreviewItems}" OuterRadius="120" CenterTitle="JPG × 3" HorizontalAlignment="Center" />
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+          <Button Classes="accent" Content="{DynamicResource common.save}" />
+          <Button Content="{DynamicResource common.cancel}" />
+        </StackPanel>
+        <Slider Value="60" Maximum="100" />
+        <ToggleSwitch IsChecked="True" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

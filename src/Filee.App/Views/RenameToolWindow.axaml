@@ -1,0 +1,174 @@
+<!-- Renaming converted files of a watch folder: steps on the right with the preview, ready-made replacements on
+     the left (double-click or + adds one). Opened from Watch folders → More options. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Filee.App.ViewModels"
+        x:Class="Filee.App.Views.RenameToolWindow"
+        x:DataType="vm:RenameToolViewModel"
+        Title="{DynamicResource watch.rename_title}"
+        Icon="avares://Filee/Assets/Icons/filee.ico"
+        Width="880" Height="640" MinWidth="640" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Window.Styles>
+    <Style Selector="Border.recipe">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Border.recipe:pointerover">
+      <Setter Property="Background" Value="{DynamicResource AccentFaintBrush}" />
+    </Style>
+    <Style Selector="TextBlock.code">
+      <Setter Property="FontFamily" Value="Consolas, Menlo, monospace" />
+    </Style>
+  </Window.Styles>
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="20,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SubtleBorderBrush}"
+            Background="{DynamicResource SurfaceBrush}">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Content="{DynamicResource common.cancel}" Click="OnCancel" IsCancel="True" />
+        <Button Classes="accent" Content="{DynamicResource common.save}" Click="OnSave" IsDefault="True" IsEnabled="{Binding IsValid}" />
+      </StackPanel>
+    </Border>
+
+    <StackPanel DockPanel.Dock="Top" Margin="20,16,20,4" Spacing="4">
+      <TextBlock Classes="h2" Text="{DynamicResource watch.rename_title}" />
+      <TextBlock Classes="caption" Text="{DynamicResource watch.rename_intro}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Grid ColumnDefinitions="340,*" Margin="20,8,20,16">
+      <!-- Ready-made replacements -->
+      <DockPanel Margin="0,0,16,0">
+        <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,6">
+          <TextBlock Classes="label" Text="{DynamicResource watch.recipes}" />
+          <TextBlock Classes="caption" Text="{DynamicResource watch.recipes_hint}" TextWrapping="Wrap" />
+        </StackPanel>
+        <Border BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Recipes}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:RenameRecipeViewModel">
+                  <Border Classes="recipe" Padding="10,7" DoubleTapped="OnRecipeDoubleTapped">
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding AddCommand}" ToolTip.Tip="{DynamicResource watch.recipe_add}"
+                              VerticalAlignment="Center" Margin="6,0,0,0">
+                        <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Plus}" />
+                      </Button>
+                      <StackPanel Spacing="1">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock FontWeight="SemiBold" Text="{Binding Title}" TextWrapping="Wrap" />
+                          <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="4" Padding="5,0" IsVisible="{Binding IsAdvanced}" VerticalAlignment="Center">
+                            <TextBlock Classes="caption" Text="{DynamicResource watch.advanced}" />
+                          </Border>
+                        </StackPanel>
+                        <TextBlock Classes="caption" Text="{Binding Example}" TextWrapping="Wrap" />
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Border>
+      </DockPanel>
+
+      <!-- The base name, the rules and what they do -->
+      <ScrollViewer Grid.Column="1">
+        <StackPanel Spacing="16" Margin="0,0,4,0">
+          <!-- 1. Base name: typed, or built with the part buttons -->
+          <StackPanel Spacing="6">
+            <TextBlock Classes="label" Text="{DynamicResource watch.name}" />
+            <TextBox Text="{Binding NamePattern}" PlaceholderText="{Binding NamePlaceholder}" />
+            <ItemsControl ItemsSource="{Binding Tokens}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:NamePart">
+                  <Button Padding="8,3" Margin="0,0,6,6" Tag="{Binding Token}" Click="OnInsertToken">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Plus}" />
+                      <TextBlock Classes="caption" Text="{Binding Label}" />
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="caption" Text="{DynamicResource watch.name_hint}" TextWrapping="Wrap" />
+          </StackPanel>
+
+          <!-- 2. Rules applied to it -->
+          <StackPanel Spacing="6">
+            <TextBlock Classes="label" Text="{DynamicResource watch.rename_steps}" />
+            <TextBlock Classes="caption" Text="{DynamicResource watch.rename_no_steps}" TextWrapping="Wrap" IsVisible="{Binding HasNoSteps}" />
+            <ItemsControl ItemsSource="{Binding Steps}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="6" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:RenameStepViewModel">
+                  <StackPanel Spacing="2">
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Classes="icon" Margin="2,0,0,0" Command="{Binding RemoveCommand}" ToolTip.Tip="{DynamicResource watch.remove_step}">
+                        <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
+                      </Button>
+                      <Button DockPanel.Dock="Right" Classes="icon" Margin="6,0,0,0" Command="{Binding MoveUpCommand}" ToolTip.Tip="{DynamicResource watch.step_up}">
+                        <PathIcon Width="12" Height="12" Data="{StaticResource Icon.ChevronRight}" RenderTransform="rotate(-90deg)" />
+                      </Button>
+                      <!-- What the rule does, then only the boxes that kind needs -->
+                      <ComboBox DockPanel.Dock="Left" Width="190" Margin="0,0,8,0" ItemsSource="{Binding Kinds}" SelectedItem="{Binding Kind}" />
+                      <Panel>
+                        <Grid ColumnDefinitions="*,Auto,*" IsVisible="{Binding ShowArrow}">
+                          <TextBox Text="{Binding Find}" PlaceholderText="{Binding FindPlaceholder}" />
+                          <TextBlock Grid.Column="1" Classes="muted" Text="→" Margin="8,0" VerticalAlignment="Center" />
+                          <TextBox Grid.Column="2" Text="{Binding Replace}" PlaceholderText="{Binding ReplacePlaceholder}" />
+                        </Grid>
+                        <TextBox Text="{Binding Find}" PlaceholderText="{Binding FindPlaceholder}" IsVisible="{Binding ShowFindOnly}" />
+                        <TextBox Text="{Binding Replace}" PlaceholderText="{Binding ReplacePlaceholder}" IsVisible="{Binding ShowReplaceOnly}" />
+                      </Panel>
+                    </DockPanel>
+                    <TextBlock Classes="caption danger" Text="{Binding Error}" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button HorizontalAlignment="Left" Command="{Binding AddStepCommand}" Padding="10,5">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Plus}" />
+                <TextBlock Text="{DynamicResource watch.add_step}" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+
+          <!-- Before → after, for files in the folder and for a name typed here -->
+          <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="8" Padding="12,10">
+            <StackPanel Spacing="6">
+              <TextBlock Classes="label" Text="{DynamicResource watch.preview}" />
+              <ItemsControl ItemsSource="{Binding Previews}" IsVisible="{Binding HasSamples}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:RenamePreview">
+                    <Grid ColumnDefinitions="*,Auto,*" Margin="0,2">
+                      <TextBlock Classes="caption" Text="{Binding Before}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Classes="muted" Text="→" Margin="8,0" />
+                      <TextBlock Grid.Column="2" FontWeight="SemiBold" Text="{Binding After}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Classes="caption" Text="{DynamicResource watch.rename_try}" Margin="0,4,0,0" />
+              <Grid ColumnDefinitions="*,Auto,*">
+                <TextBox Text="{Binding CustomName}" PlaceholderText="{DynamicResource watch.rename_try_placeholder}" />
+                <TextBlock Grid.Column="1" Classes="muted" Text="→" Margin="8,0" VerticalAlignment="Center" />
+                <SelectableTextBlock Grid.Column="2" FontWeight="SemiBold" Text="{Binding CustomResult}" VerticalAlignment="Center" TextWrapping="Wrap" />
+              </Grid>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>

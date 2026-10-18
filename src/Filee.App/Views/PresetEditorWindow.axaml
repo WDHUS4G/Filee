@@ -1,0 +1,33 @@
+<!-- The preset popup opened by right-click / ✎ on a donut slice. Same editor as the Presets page. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Filee.App.ViewModels"
+        xmlns:views="using:Filee.App.Views"
+        x:Class="Filee.App.Views.PresetEditorWindow"
+        x:DataType="vm:PresetEditorViewModel"
+        Title="{DynamicResource presets.editor_title}"
+        Icon="avares://Filee/Assets/Icons/filee.ico"
+        Width="560" Height="680" MinWidth="440" MinHeight="400"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="20,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SubtleBorderBrush}"
+            Background="{DynamicResource SurfaceBrush}">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Content="{DynamicResource common.cancel}" Click="OnCancel" IsCancel="True" />
+        <Button Classes="accent" Content="{DynamicResource common.save}" Click="OnSave" IsDefault="True" IsEnabled="{Binding IsValid}" />
+      </StackPanel>
+    </Border>
+    <ScrollViewer Padding="20,16">
+      <StackPanel Spacing="12">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Border Width="34" Height="34" CornerRadius="999" Background="{DynamicResource AccentSoftBrush}">
+            <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Pencil}" Foreground="{DynamicResource AccentStrongBrush}" />
+          </Border>
+          <TextBlock Classes="h2" VerticalAlignment="Center" Text="{DynamicResource presets.editor_title}" />
+        </StackPanel>
+        <views:PresetEditorView />
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

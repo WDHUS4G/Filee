@@ -1,0 +1,40 @@
+// Version information of the Explorer context-menu DLL. build/build-explorer-menu.ps1 passes the app version as
+// FILEE_VERSION_MAJOR/MINOR/PATCH and FILEE_VERSION_TEXT.
+
+#include <winver.h>
+
+#ifndef FILEE_VERSION_MAJOR
+#define FILEE_VERSION_MAJOR 0
+#define FILEE_VERSION_MINOR 0
+#define FILEE_VERSION_PATCH 0
+#define FILEE_VERSION_TEXT "0.0.0"
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION FILEE_VERSION_MAJOR, FILEE_VERSION_MINOR, FILEE_VERSION_PATCH, 0
+PRODUCTVERSION FILEE_VERSION_MAJOR, FILEE_VERSION_MINOR, FILEE_VERSION_PATCH, 0
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_DLL
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Filee contributors"
+            VALUE "FileDescription", "Filee File Explorer context menu"
+            VALUE "FileVersion", FILEE_VERSION_TEXT
+            VALUE "InternalName", "FileeExplorerMenu"
+            VALUE "LegalCopyright", "Copyright (c) Filee contributors. MIT License."
+            VALUE "OriginalFilename", "FileeExplorerMenu.dll"
+            VALUE "ProductName", "Filee"
+            VALUE "ProductVersion", FILEE_VERSION_TEXT
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
