@@ -66,7 +66,10 @@ public static class Motion
     public static void Track(Window window)
     {
         lock (Windows)
+        {
+            Windows.RemoveAll(w => !w.TryGetTarget(out _)); // the main window is a new one each time it opens
             Windows.Add(new WeakReference<Window>(window));
+        }
         Apply(window);
     }
 

@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Id": "filee-donut",
+        "Name": "Filee donut at the cursor",
+        "Description": "Moves Filee's donut window to the cursor, which Wayland apps cannot do themselves.",
+        "License": "MIT",
+        "Version": "1.1"
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js",
+    "KPackageStructure": "KWin/Script"
+}

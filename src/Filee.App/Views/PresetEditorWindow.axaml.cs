@@ -12,6 +12,7 @@ public partial class PresetEditorWindow : Window
     {
         InitializeComponent();
         Motion.Track(this);
+        UiZoom.Track(this);
     }
 
     /// <summary>True after the user saved (also available when the window was not shown as a dialog).</summary>

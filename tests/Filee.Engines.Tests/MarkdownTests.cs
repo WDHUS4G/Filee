@@ -2,6 +2,7 @@
 // profile warm-up.
 
 using Filee.Core.Conversion;
+using Filee.Core.Formats;
 using Filee.Core.Presets;
 using Filee.Engines.Infrastructure;
 using Filee.Engines.Office;
@@ -190,5 +191,65 @@ public class MarkdownTests(EngineFixture fx) : IClassFixture<EngineFixture>
     private sealed class SyncProgress(Action<double> report) : IProgress<double>
     {
         public void Report(double value) => report(value);
+    }
+
+    // ───────────────────────── Logs and script source as text (issues #254, #273, #284) ─────────────────────────
+
+    [Theory]
+    [InlineData("log")]
+    [InlineData("py")]
+    [InlineData("pac")]
+    [InlineData("bat")]
+    [InlineData("command")]
+    public async Task Logs_and_script_source_become_utf8_txt_with_the_text_unchanged(string extension)
+    {
+        var input = Path.Combine(fx.NewFolder(), "source." + extension);
+        const string Content = "# Local source text\nprint('مرحبا 中文 한국어')\n<not markup> & \"quoted\" **not bold**\n";
+        await File.WriteAllTextAsync(input, Content, TestContext.Current.CancellationToken);
+        Assert.Equal("txt", FormatRegistry.Detect(input)?.Id);
+
+        var job = await fx.ConvertAsync([input], new Preset { TargetFormat = "txt" });
+
+        Assert.Equal(JobState.Completed, job.State);
+        var output = Assert.Single(job.Outputs);
+        Assert.Equal(".txt", Path.GetExtension(output));
+        Assert.Equal(Content, await File.ReadAllTextAsync(output, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("py")]
+    [InlineData("bat")]
+    [InlineData("command")]
+    public async Task Script_source_is_read_and_never_run(string extension)
+    {
+        var folder = fx.NewFolder();
+        var marker = Path.Combine(folder, "executed.txt").Replace('\\', '/');
+        var input = Path.Combine(folder, "script." + extension);
+        var content = extension switch
+        {
+            "py" => $"from pathlib import Path\nPath(r'{marker}').write_text('executed')\n",
+            "bat" => $"@echo off\r\necho executed>\"{marker}\"\r\n",
+            _ => $"#!/bin/sh\nprintf executed > '{marker}'\n",
+        };
+        await File.WriteAllTextAsync(input, content, TestContext.Current.CancellationToken);
+
+        var job = await fx.ConvertAsync([input], new Preset { TargetFormat = "txt" });
+
+        Assert.Equal(JobState.Completed, job.State);
+        Assert.Equal(content, await File.ReadAllTextAsync(Assert.Single(job.Outputs), TestContext.Current.CancellationToken));
+        Assert.False(File.Exists(marker));
+    }
+
+    [Fact]
+    public async Task A_legacy_korean_text_file_becomes_utf8()
+    {
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        var input = Path.Combine(fx.NewFolder(), "memo.txt");
+        await File.WriteAllBytesAsync(input, System.Text.Encoding.GetEncoding(949).GetBytes("한글 메모\n"), TestContext.Current.CancellationToken);
+
+        var job = await fx.ConvertAsync([input], new Preset { TargetFormat = "txt" });
+
+        Assert.Equal(JobState.Completed, job.State);
+        Assert.Equal("한글 메모\n", await File.ReadAllTextAsync(Assert.Single(job.Outputs), TestContext.Current.CancellationToken));
     }
 }

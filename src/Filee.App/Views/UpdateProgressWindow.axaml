@@ -1,0 +1,35 @@
+<!-- Dialog showing download progress and status while an in-app update is downloading or being installed. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Filee.App.Views.UpdateProgressWindow"
+        Title="Filee"
+        Icon="avares://Filee/Assets/Icons/filee.ico"
+        Width="440"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Border Classes="card" Margin="16" Padding="20">
+    <DockPanel>
+      <Image DockPanel.Dock="Left" Source="avares://Filee/Assets/Icons/filee.png" Width="44" Height="44"
+             VerticalAlignment="Top" Margin="0,0,16,0" />
+      <StackPanel Spacing="10">
+        <StackPanel Spacing="3">
+          <TextBlock x:Name="TitleText" Classes="h2" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock x:Name="VersionText" Classes="caption" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <ProgressBar x:Name="ProgressBar" Classes="soft" Minimum="0" Maximum="100" Height="6" Margin="0,4,0,2" />
+
+        <DockPanel>
+          <TextBlock x:Name="PercentText" DockPanel.Dock="Right" Classes="caption" FontWeight="Medium" />
+          <TextBlock x:Name="StatusText" Classes="caption" TextWrapping="Wrap" />
+        </DockPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+          <Button x:Name="ActionButton" Content="{DynamicResource common.close}" Click="OnClose" MinWidth="80" HorizontalContentAlignment="Center" />
+        </StackPanel>
+      </StackPanel>
+    </DockPanel>
+  </Border>
+</Window>

@@ -43,6 +43,48 @@ public static class BuiltInData
             Id = "remove-background", NameKey = "preset.remove_background", TargetFormat = "png",
             Image = { RemoveBackground = true }, Output = { FileNamePattern = "{name}_transparent" },
         },
+        .. TrimPresets(),
+        new()
+        {
+            Id = "tool-crop", NameKey = "preset.crop", TargetFormat = SameAsSource,
+            Kind = PresetKind.Tool, Output = { FileNamePattern = "{name}_cropped" },
+        },
+        new()
+        {
+            Id = "tool-sheet-studio", NameKey = "preset.sheet_studio", TargetFormat = "pdf",
+            Kind = PresetKind.Tool, Output = { FileNamePattern = "{name}_prepared" },
+        },
+        new()
+        {
+            Id = "tool-pdf-crop", NameKey = "preset.pdf_crop", TargetFormat = SameAsSource,
+            Kind = PresetKind.Tool, Output = { FileNamePattern = "{name}_cropped" },
+        },
+        new()
+        {
+            Id = "tool-pdf-pages", NameKey = "preset.pdf_pages", TargetFormat = SameAsSource,
+            Kind = PresetKind.Tool, Output = { FileNamePattern = "{name}_edited" },
+        },
+        new()
+        {
+            Id = "tool-pdf-add", NameKey = "preset.pdf_add", TargetFormat = SameAsSource,
+            Kind = PresetKind.Tool, Output = { FileNamePattern = "{name}_merged" },
+        },
+        new()
+        {
+            Id = "pdf-rotate-left", NameKey = "preset.rotate_left", TargetFormat = "pdf",
+            Pdf = { Rotation = PdfRotation.Left90 }, Output = { FileNamePattern = "{name}_left" },
+        },
+        new()
+        {
+            Id = "pdf-rotate-right", NameKey = "preset.rotate_right", TargetFormat = "pdf",
+            Pdf = { Rotation = PdfRotation.Right90 }, Output = { FileNamePattern = "{name}_right" },
+        },
+        new()
+        {
+            Id = "pdf-edit", NameKey = "preset.group_pdf_edit", TargetFormat = Preset.GroupTarget,
+            Kind = PresetKind.Group,
+            SubPresetIds = ["tool-pdf-crop", "pdf-rotate-left", "pdf-rotate-right", "tool-pdf-pages", "pdf-split", "tool-pdf-add"],
+        },
         .. ImageToolPresets(),
         new()
         {
@@ -65,6 +107,14 @@ public static class BuiltInData
             Id = "pdf-split", NameKey = "preset.split_pdf", TargetFormat = "pdf",
             Pdf = { SplitPages = true }, Output = { Location = OutputLocation.Subfolder, SubfolderName = "{name}" },
         },
+        .. PdfCompressionPresets(),
+        .. OcrPresets(),
+        .. PdfSlidesPresets(),
+        .. FramePresets(),
+        .. MotionPhotoPresets(),
+        .. LivePhotoPresets(),
+        .. ClipPresets(),
+        .. MediaToolPresets(),
         new() { Id = "to-docx", Name = "DOCX", TargetFormat = "docx" },
         new() { Id = "to-hwpx", Name = "HWPX", TargetFormat = "hwpx" },
         .. HwpPresets(),
@@ -78,7 +128,154 @@ public static class BuiltInData
         .. DataPresets(),
         .. CodecAndSubtitlePresets(),
         .. ModelPresets(),
+        .. GeoPresets(),
         .. TracePresets(),
+    ];
+
+    /// <summary>
+    /// The video of a Live / Motion Photo as MP4 (added in settings schema 29), on no donut: the images donut is full,
+    /// so users add it in Settings → Toolbar.
+    /// </summary>
+    public static List<Preset> MotionPhotoPresets() =>
+    [
+        new() { Id = "extract-motion", NameKey = "preset.extract_motion", TargetFormat = "mp4", Media = { ExtractMotionPhoto = true } },
+    ];
+
+    /// <summary>
+    /// A clip of a video as an iPhone Live Photo (a JPG and a MOV) or an Android Motion Photo (added in settings schema
+    /// 31), on the back of the video donut after "Extract frames".
+    /// </summary>
+    public static List<Preset> LivePhotoPresets() =>
+    [
+        new() { Id = "live-photo-iphone", NameKey = "preset.live_photo_iphone", TargetFormat = "jpg", Media = { LivePhoto = LivePhotoKind.Apple } },
+        new() { Id = "motion-photo-android", NameKey = "preset.motion_photo_android", TargetFormat = "jpg", Media = { LivePhoto = LivePhotoKind.Android } },
+    ];
+
+    /// <summary>
+    /// "Cut a clip" (added in settings schema 45): a part of a video, chosen on a timeline, as a file of its own. First on
+    /// the back of the video donut, as "Crop" is on the images donut.
+    /// </summary>
+    public static List<Preset> ClipPresets() =>
+    [
+        new()
+        {
+            Id = "tool-clip", NameKey = "preset.clip", TargetFormat = SameAsSource,
+            Kind = PresetKind.Tool, Tool = Preset.ClipTool, Output = { FileNamePattern = "{name}_clip" },
+        },
+    ];
+
+    /// <summary>
+    /// "Trim transparent borders" (issue #332, added in settings schema 33): a copy cropped to the visible pixels, in the
+    /// same format. On the images donut's back face after "Remove background".
+    /// </summary>
+    public static List<Preset> TrimPresets() =>
+    [
+        new()
+        {
+            Id = "trim-transparent", NameKey = "preset.trim_transparent", TargetFormat = SameAsSource,
+            Image = { TrimTransparent = true }, Output = { FileNamePattern = "{name}_trimmed" },
+        },
+    ];
+
+    /// <summary>
+    /// Everyday tools (added in settings schema 37): smaller copies of images, videos and audio, a video of photos,
+    /// a video's sound as M4A, videos or audio files joined into one, and a copy without metadata. On the back faces
+    /// of the images, PDF, video and audio donuts where they have room.
+    /// </summary>
+    public static List<Preset> MediaToolPresets() =>
+    [
+        new()
+        {
+            // Quality 75 like most photo apps' "smaller"; a JPEG saved below it stays at its own quality.
+            Id = "compress-image", NameKey = "preset.compress_image", TargetFormat = SameAsSource,
+            Image = { Quality = 75, MaxCompression = true, TiffCompression = TiffCompression.Zip },
+            Output = { FileNamePattern = "{name}_compressed", OnlyIfSmaller = true },
+        },
+        new()
+        {
+            // H.264 at the Small quality, at most 1080p: plays everywhere, a fraction of a phone video's size.
+            Id = "compress-video", NameKey = "preset.compress_video", TargetFormat = "mp4",
+            Media = { Quality = MediaQuality.Small, MaxHeight = 1080 }, Output = { FileNamePattern = "{name}_compressed", OnlyIfSmaller = true },
+        },
+        new()
+        {
+            Id = "video-from-images", NameKey = "preset.video_from_images", TargetFormat = "mp4",
+            Media = { Slideshow = true }, Output = { FileNamePattern = "{name}_video" },
+        },
+        new()
+        {
+            Id = "extract-audio", NameKey = "preset.extract_audio", TargetFormat = "m4a",
+            Media = { CopyAudioWhenPossible = true },
+        },
+        new()
+        {
+            Id = "merge-videos", NameKey = "preset.merge_videos", TargetFormat = "mp4",
+            Media = { JoinIntoOne = true }, Output = { FileNamePattern = "{name}_merged" },
+        },
+        new()
+        {
+            // AAC at the Small quality: 128 kbit/s for stereo.
+            Id = "compress-audio", NameKey = "preset.compress_audio", TargetFormat = "m4a",
+            Media = { Quality = MediaQuality.Small }, Output = { FileNamePattern = "{name}_compressed", OnlyIfSmaller = true },
+        },
+        new()
+        {
+            Id = "merge-audio", NameKey = "preset.merge_audio", TargetFormat = "m4a",
+            Media = { JoinIntoOne = true }, Output = { FileNamePattern = "{name}_merged" },
+        },
+        new()
+        {
+            // Everything goes, the colour profile too; the preset editor can keep it. File dates are new ones.
+            Id = "remove-metadata", NameKey = "preset.remove_metadata", TargetFormat = SameAsSource,
+            Image = { Quality = 90, KeepMetadata = false, KeepColorProfile = false, KeepSourceQuality = true },
+            Pdf = { RemoveMetadata = true }, Media = { RemoveMetadata = true },
+            Output = { FileNamePattern = "{name}_clean" },
+        },
+    ];
+
+    /// <summary>
+    /// "Compress PDF": pictures at 150 dpi, the rest compressed losslessly (added in settings schema 20). On no default
+    /// donut, the PDF donut is full: users add it in Settings → Toolbar.
+    /// </summary>
+    public static List<Preset> PdfCompressionPresets() =>
+    [
+        new()
+        {
+            Id = "compress-pdf", NameKey = "preset.compress_pdf", TargetFormat = "pdf",
+            Pdf = { Compression = PdfCompression.Ebook }, Output = { FileNamePattern = "{name}_compressed" },
+        },
+    ];
+
+    /// <summary>
+    /// "Searchable PDF": scans and pictures with their text recognized by Tesseract (added in settings schema 40). On no
+    /// donut, like "Compress PDF".
+    /// </summary>
+    public static List<Preset> OcrPresets() =>
+    [
+        new()
+        {
+            Id = "searchable-pdf", NameKey = "preset.searchable_pdf", TargetFormat = "pdf",
+            Pdf = { Ocr = true }, Output = { FileNamePattern = "{name}_searchable" },
+        },
+    ];
+
+    /// <summary>
+    /// PDF → PowerPoint with a picture of each page on its own slide (added in settings schema 18). JPEG at 90 like the
+    /// JPG preset; the render DPI is the PDF default (150), which the converter never goes below.
+    /// </summary>
+    public static List<Preset> PdfSlidesPresets() =>
+    [
+        new() { Id = "pdf-slides", NameKey = "preset.pdf_slides", TargetFormat = "pptx", Image = { Quality = 90 } },
+    ];
+
+    /// <summary>
+    /// Every frame of a video as PNG or JPG pictures in a folder (added in settings schema 19), on no donut: a long
+    /// video gives thousands of files, so users add them in Settings → Toolbar.
+    /// </summary>
+    public static List<Preset> FramePresets() =>
+    [
+        new() { Id = "extract-frames-png", NameKey = "preset.extract_frames_png", TargetFormat = "png", Media = { SaveEveryFrame = true } },
+        new() { Id = "extract-frames-jpg", NameKey = "preset.extract_frames_jpg", TargetFormat = "jpg", Media = { SaveEveryFrame = true } },
     ];
 
     /// <summary>Raster → SVG tracing, in colour and as black line art (added in settings schema 16).</summary>
@@ -142,6 +339,19 @@ public static class BuiltInData
         new() { Id = "to-3mf", Name = "3MF", TargetFormat = "3mf" },
         new() { Id = "to-ply", Name = "PLY", TargetFormat = "ply" },
         new() { Id = "to-gltf", Name = "glTF", TargetFormat = "gltf" },
+    ];
+
+    /// <summary>
+    /// Geospatial vector targets (added in settings schema 25, see SettingsMigrations). CSV, the sixth slice of the
+    /// donut, is the spreadsheet preset. KMZ is a KML in a ZIP and is on no donut.
+    /// </summary>
+    public static List<Preset> GeoPresets() =>
+    [
+        new() { Id = "to-geojson", Name = "GeoJSON", TargetFormat = "geojson" },
+        new() { Id = "to-shp", Name = "Shapefile", TargetFormat = "shp" },
+        new() { Id = "to-kml", Name = "KML", TargetFormat = "kml" },
+        new() { Id = "to-gpx", Name = "GPX", TargetFormat = "gpx" },
+        new() { Id = "to-kmz", Name = "KMZ", TargetFormat = "kmz" },
     ];
 
     /// <summary>
@@ -264,7 +474,7 @@ public static class BuiltInData
 
     /// <summary>
     /// Structured data and contacts targets (added in settings schema 14, see SettingsMigrations). EML is for Outlook
-    /// MSG files, vCard for contact lists in CSV; neither is on a donut.
+    /// MSG files; vCard and iCalendar are on the back of the spreadsheets donut.
     /// </summary>
     public static List<Preset> DataPresets() =>
     [
@@ -274,9 +484,14 @@ public static class BuiltInData
         new() { Id = "to-xml", Name = "XML", TargetFormat = "xml" },
         new() { Id = "to-eml", Name = "EML", TargetFormat = "eml" },
         new() { Id = "to-vcf", Name = "vCard", TargetFormat = "vcf" },
+        new() { Id = "to-ics", Name = "iCalendar", TargetFormat = "ics" },
     ];
 
-    /// <summary>Creates the default toolbar profiles.</summary>
+    /// <summary>
+    /// Creates the default toolbar profiles. Each has a back face (Tab or the mouse wheel flips the open donut to it, settings schema 30)
+    /// with presets for its files that aren't on its front: less common formats and tools (rotate, merge, compress
+    /// into one ZIP, ...). The fronts are as they were before back faces.
+    /// </summary>
     public static List<ToolbarProfile> CreateProfiles() =>
     [
         new()
@@ -284,18 +499,23 @@ public static class BuiltInData
             Id = "images", NameKey = "profile.images",
             Extensions = ExtensionsOf(FormatCategory.Image),
             PresetIds = ["to-png", "to-jpg", "to-webp", "to-pdf", "trace-svg", "trace-line-art", "to-tiff", "to-bmp", "to-ico", "half-size"],
+            // Full (ToolbarProfile.MaxSlices): "Extract Live Photo video" stays in the library, on no donut.
+            BackPresetIds = ["tool-crop", "rotate", "flip", "remove-background", "trim-transparent", "grayscale", "to-avif", "to-gif", "merge-pdf",
+                "compress-image", "remove-metadata", "zip-all"],
         },
         new()
         {
             Id = "pdf", NameKey = "profile.pdf",
             Extensions = ["pdf"],
-            PresetIds = ["to-png", "to-jpg", "pdf-long-image", "to-docx", "to-txt", "to-md", "to-epub", "to-hwpx", "to-hwp", "to-tiff", "pdf-split", "merge-pdf"],
+            PresetIds = [.. PdfDonut],
+            BackPresetIds = ["pdf-edit", "compress-pdf", "to-webp", "to-tiff", "to-html", "to-odt", "to-rtf", "to-azw3", "to-cbz", "remove-metadata", "zip-all"],
         },
         new()
         {
             Id = "office", NameKey = "profile.office",
             Extensions = ExtensionsOf(FormatCategory.Document),
             PresetIds = ["to-pdf", "to-hwpx", "to-hwp", "to-docx", "to-odt", "to-txt", "to-html", "to-epub", "to-png", "merge-pdf"],
+            BackPresetIds = ["to-md", "to-rtf", "to-jpg", "pdf-long-image", "to-azw3", "to-kepub", "zip-all"],
         },
         SpreadsheetProfile(),
         PresentationProfile(),
@@ -304,17 +524,31 @@ public static class BuiltInData
             Id = "hwp", NameKey = "profile.hwp",
             Extensions = ["hwp", "hwpx"],
             PresetIds = ["to-pdf", "to-docx", "to-hwpx", "to-hwp", "to-png", "to-jpg", "to-txt", "to-md", "to-epub", "merge-pdf"],
+            BackPresetIds = ["to-html", "to-odt", "to-rtf", "pdf-long-image", "to-azw3", "zip-all"],
         },
         TextProfile(),
         .. WithSubtitleProfile(CatalogProfiles()),
         DataProfile(),
         ModelProfile(),
+        GeoProfile(),
         new()
         {
             Id = "mixed", NameKey = "profile.mixed", IsFallback = true,
             PresetIds = ["to-pdf", "merge-pdf", "zip-all", "to-png", "to-txt"],
+            BackPresetIds = ["to-jpg", "to-webp", "to-docx", "to-md", "to-html", "compress-pdf"],
         },
     ];
+
+    /// <summary>
+    /// The PDF donut. Settings schema 18 put "PPTX (slides)" after DOCX in place of TIFF (a donut holds 12 slices); TIFF
+    /// stays a preset to add in Settings → Toolbar.
+    /// </summary>
+    public static readonly IReadOnlyList<string> PdfDonut =
+        ["to-png", "to-jpg", "pdf-long-image", "to-docx", "pdf-slides", "to-txt", "to-md", "to-epub", "to-hwpx", "to-hwp", "pdf-split", "merge-pdf"];
+
+    /// <summary>The PDF donut of settings schema 9 to 17, which schema 18 replaces when the user never changed it.</summary>
+    public static readonly IReadOnlyList<string> PdfDonutBefore18 =
+        ["to-png", "to-jpg", "pdf-long-image", "to-docx", "to-txt", "to-md", "to-epub", "to-hwpx", "to-hwp", "to-tiff", "pdf-split", "merge-pdf"];
 
     /// <summary>Excel, OpenDocument and CSV sheets (split from "office" in settings schema 5).</summary>
     public static ToolbarProfile SpreadsheetProfile() => new()
@@ -323,6 +557,7 @@ public static class BuiltInData
         NameKey = "profile.spreadsheets",
         Extensions = ExtensionsOf(FormatCategory.Spreadsheet),
         PresetIds = ["to-pdf", "to-xlsx", "to-csv", "to-json", "to-ods", "to-hwpx", "to-hwp", "to-html", "merge-pdf"],
+        BackPresetIds = ["tool-sheet-studio", "to-docx", "to-md", "to-txt", "to-yaml", "to-xml", "to-vcf", "to-ics", "to-png", "zip-all"],
     };
 
     /// <summary>PowerPoint and OpenDocument slides (split from "office" in settings schema 5).</summary>
@@ -332,15 +567,17 @@ public static class BuiltInData
         NameKey = "profile.presentations",
         Extensions = ExtensionsOf(FormatCategory.Presentation),
         PresetIds = ["to-pdf", "to-png", "to-jpg", "to-pptx", "to-hwpx", "to-hwp", "merge-pdf"],
+        BackPresetIds = ["to-odp", "to-webp", "pdf-long-image", "to-docx", "to-txt", "to-md", "to-html", "zip-all"],
     };
 
-    /// <summary>Markdown, plain text and HTML (added in settings schema 4, see SettingsMigrations).</summary>
+    /// <summary>Markdown, plain text and HTML (added in settings schema 4, see SettingsMigrations); MHTML (schema 23).</summary>
     public static ToolbarProfile TextProfile() => new()
     {
         Id = "text",
         NameKey = "profile.text",
         Extensions = ExtensionsOf(FormatCategory.Text),
         PresetIds = ["to-pdf", "to-hwpx", "to-hwp", "to-docx", "to-html", "to-txt", "to-epub"],
+        BackPresetIds = ["to-md", "to-odt", "to-rtf", "to-kepub", "merge-pdf", "zip-all"],
     };
 
     /// <summary>Donuts of the categories added in settings schema 6, in the order they follow "text".</summary>
@@ -351,52 +588,66 @@ public static class BuiltInData
             Id = "ebooks", NameKey = "profile.ebooks",
             Extensions = ExtensionsOf(FormatCategory.Ebook),
             PresetIds = ["to-pdf", "to-epub", "to-docx", "to-txt", "to-azw3", "to-mobi", "to-kepub", "to-hwpx", "to-hwp", "to-html"],
+            BackPresetIds = ["to-fb2", "to-md", "to-rtf", "to-odt", "merge-pdf", "zip-all"],
         },
         new()
         {
             Id = "video", NameKey = "profile.video",
             Extensions = ExtensionsOf(FormatCategory.Video),
             PresetIds = ["to-mp4", "mp4-720", "mp4-hevc", "to-webm", "to-mov", "to-gif", "to-mp3", "extract-subtitles", "to-mkv", "to-avi"],
+            // Every frame as pictures is on no front (a long video gives thousands of files): behind a flip, a drop that
+            // misses its slice doesn't start it. Live / Motion Photos of a clip are there too, and "Cut a clip" first
+            // (in place of FLAC, which stays in the library).
+            BackPresetIds = ["tool-clip", "mp4-av1", "to-webp", "extract-frames-png", "extract-frames-jpg", "live-photo-iphone", "motion-photo-android",
+                "extract-audio", "to-wav", "compress-video", "merge-videos", "zip-all"],
         },
         new()
         {
             Id = "audio", NameKey = "profile.audio",
             Extensions = ExtensionsOf(FormatCategory.Audio),
             PresetIds = ["to-mp3", "mp3-128", "to-m4a", "to-wav", "to-flac", "to-ogg", "to-opus", "to-aac"],
+            BackPresetIds = ["to-alac", "compress-audio", "merge-audio", "remove-metadata", "zip-all"],
         },
         new()
         {
             Id = "vector", NameKey = "profile.vector",
             Extensions = ExtensionsOf(FormatCategory.Vector),
             PresetIds = ["to-png", "to-pdf", "to-svg", "to-jpg", "to-webp", "to-eps"],
+            BackPresetIds = ["to-tiff", "to-ico", "to-icns", "to-avif", "to-dxf", "merge-pdf", "zip-all"],
         },
         new()
         {
             Id = "archives", NameKey = "profile.archives",
             Extensions = ExtensionsOf(FormatCategory.Archive),
-            PresetIds = ["extract", "to-zip", "to-7z", "to-tgz", "to-tar"],
+            // "One ZIP" since settings schema 28.
+            PresetIds = ["extract", "zip-all", "to-zip", "to-7z", "to-tgz", "to-tar"],
+            // Nothing else converts archives: no back face, Tab does nothing.
+            BackPresetIds = [],
         },
         new()
         {
             Id = "cad", NameKey = "profile.cad",
             Extensions = ExtensionsOf(FormatCategory.Cad),
             PresetIds = ["to-pdf", "to-png", "to-svg", "to-dxf", "to-dwg"],
+            BackPresetIds = ["to-jpg", "to-webp", "to-tiff", "merge-pdf", "zip-all"],
         },
         new()
         {
             Id = "fonts", NameKey = "profile.fonts",
             Extensions = ExtensionsOf(FormatCategory.Font),
             PresetIds = ["to-woff2", "to-woff", "to-ttf", "to-otf", "to-eot"],
+            BackPresetIds = ["zip-all"],
         },
     ];
 
-    /// <summary>JSON, YAML, TOML, XML and vCard files (added in settings schema 14, after "fonts").</summary>
+    /// <summary>JSON, YAML, TOML, XML, vCard and iCalendar files (added in settings schema 14, after "fonts").</summary>
     public static ToolbarProfile DataProfile() => new()
     {
         Id = "data",
         NameKey = "profile.data",
         Extensions = ExtensionsOf(FormatCategory.Data),
         PresetIds = ["to-json", "to-yaml", "to-toml", "to-xml", "to-csv", "to-xlsx"],
+        BackPresetIds = ["to-ods", "to-html", "to-md", "zip-all"],
     };
 
     /// <summary>Text subtitles: SRT, ASS, WebVTT, SAMI, LRC, ... (added in settings schema 11, after "audio").</summary>
@@ -406,6 +657,7 @@ public static class BuiltInData
         NameKey = "profile.subtitles",
         Extensions = ExtensionsOf(FormatCategory.Subtitle),
         PresetIds = ["to-srt", "to-vtt", "to-ass", "to-smi", "to-lrc", "to-ttml"],
+        BackPresetIds = ["zip-all"],
     };
 
     /// <summary><paramref name="profiles"/> with the subtitle donut after the audio donut.</summary>
@@ -415,13 +667,25 @@ public static class BuiltInData
         return profiles;
     }
 
-    /// <summary>3D models: GLB, glTF, STL, OBJ, 3MF, PLY (added in settings schema 15, after "data").</summary>
+    /// <summary>3D models: GLB, glTF, STL, OBJ, 3MF, PLY (added in settings schema 15, after "data"), FBX (schema 22).</summary>
     public static ToolbarProfile ModelProfile() => new()
     {
         Id = "models",
         NameKey = "profile.models",
         Extensions = ExtensionsOf(FormatCategory.Model3D),
         PresetIds = ["to-glb", "to-stl", "to-obj", "to-3mf", "to-ply", "to-png"],
+        BackPresetIds = ["to-gltf", "to-jpg", "to-webp", "zip-all"],
+    };
+
+    /// <summary>Geospatial vector data: Shapefile, GeoJSON, KML, KMZ, GPX (added in settings schema 25, after "models").</summary>
+    public static ToolbarProfile GeoProfile() => new()
+    {
+        Id = "geo",
+        NameKey = "profile.geo",
+        Extensions = ExtensionsOf(FormatCategory.Geo),
+        PresetIds = ["to-geojson", "to-shp", "to-kml", "to-csv", "to-gpx", "to-kmz"],
+        // A shapefile is several files: one ZIP keeps them together.
+        BackPresetIds = ["zip-all"],
     };
 
     /// <summary>Every file extension of the formats in <paramref name="category"/>.</summary>

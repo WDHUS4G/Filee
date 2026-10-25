@@ -1,8 +1,10 @@
 using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Filee.App.Services;
+using Filee.App.ViewModels;
 
 namespace Filee.App.Views;
 
@@ -19,6 +21,20 @@ public partial class ToastWindow : Window
     }
 
     private ConversionService? _service;
+
+    private async void OnRequestFormat(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is JobViewModel { CanRequestFormat: true } job)
+            await Launcher.LaunchUriAsync(FormatRequest.Url(job.UnknownExtensions));
+    }
+
+    private async void OnGetFonts(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not JobViewModel { CanGetFonts: true } job)
+            return;
+        if (job.MissingFonts.Select(FontSources.Url).FirstOrDefault(uri => uri is not null) is { } source)
+            await Launcher.LaunchUriAsync(source);
+    }
     private bool _closed;
 
     protected override void OnDataContextChanged(EventArgs e)

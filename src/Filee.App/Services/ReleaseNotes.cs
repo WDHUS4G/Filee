@@ -65,9 +65,8 @@ public static class ReleaseNotes
                         "optional" => UpdateLevel.Optional,
                         _ => UpdateLevel.Recommended,
                     };
-                else if (key is "ko" or "en" or "zh" or "zh-cn")
+                else if (LanguageOf(key) is { } language)
                 {
-                    var language = key.StartsWith("zh", StringComparison.Ordinal) ? "zh-CN" : key;
                     if (!summary.TryGetValue(language, out var lines))
                         summary[language] = lines = [];
                     lines.Add(value);
@@ -76,6 +75,14 @@ public static class ReleaseNotes
         }
         return new ReleaseNote(version, level, summary.ToDictionary(p => p.Key, p => (IReadOnlyList<string>)p.Value));
     }
+
+    /// <summary>
+    /// The UI language a summary line is for: any language Filee ships ("pl"), with "zh" for Chinese. Null for other
+    /// keys, which a newer Filee may know.
+    /// </summary>
+    private static string? LanguageOf(string key) =>
+        key is "zh" ? "zh-CN"
+        : LocalizationService.Languages.FirstOrDefault(l => l.Code.Equals(key, StringComparison.OrdinalIgnoreCase)).Code;
 
     /// <summary>The notes of the releases newer than <paramref name="current"/> up to <paramref name="latest"/>, newest first.</summary>
     public static IReadOnlyList<ReleaseNote> Between(IEnumerable<(string Tag, string? Body)> releases, string current, string latest)

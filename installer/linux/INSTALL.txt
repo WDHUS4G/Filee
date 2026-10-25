@@ -2,21 +2,107 @@ Run ./Filee to test the extracted app, or ./filee-cli help for the command line.
 
 Run ./install.sh to install for the current user. It requires Python 3, creates
 an application launcher and ~/.local/bin/filee, and does not require root.
+Run ./install.sh --upgrade to safely upgrade an existing installation in place
+without uninstalling. Your settings, presets, history, and downloaded conversion
+engines are kept. Running without --upgrade refuses to overwrite an existing installation.
 Run ./uninstall.sh to remove this installation and Filee-downloaded engines.
 Your settings and converted files are kept. If integration cleanup fails, the
 installation is kept so you can fix the error and run the uninstaller again.
-An existing installation is never overwritten; uninstall it before replacing it.
 
-The .NET runtime is bundled; its native system libraries are still required.
-On Ubuntu 24.04, install the desktop and runtime dependencies with:
+Upgrade reliability and crash recovery:
+The upgrade procedure prepares files on the same filesystem and replaces the
+installation using atomic rename steps with an automatic rollback trap. If an error
+or signal interruption occurs during the swap, the previous version is restored.
+Note: While each individual directory rename is atomic in POSIX, the two-step swap
+(moving the old installation aside, then moving the new version into place) is not
+a single atomic transaction. In the event of uncatchable termination (SIGKILL) or
+sudden hardware power loss during the brief window between steps, automatic traps
+cannot execute; the previous installation is safely preserved in .backup-<pid>.
+To recover manually:
+- If the application directory does not exist:
+    mv ~/.local/share/filee/.backup-<pid> ~/.local/share/filee/application
+- If a partial or invalid application directory already exists:
+    Inspect and remove or rename ~/.local/share/filee/application first, then run:
+    mv ~/.local/share/filee/.backup-<pid> ~/.local/share/filee/application
 
-sudo apt-get install ca-certificates libc6 libgcc-s1 libgssapi-krb5-2 libicu74 libssl3t64 libstdc++6 tzdata zlib1g libfontconfig1 libfreetype6 libx11-6 libice6 libsm6 libxrandr2 libxkbcommon0 libxi6 libxtst6 fonts-noto-cjk python3
+Filee runs on Ubuntu 22.04 or newer and other distributions with glibc 2.35 or
+newer. The .NET runtime is bundled; its native system libraries are still
+required. Install the desktop and runtime dependencies with:
 
-Other distributions use different package names. The desktop needs an X11
-server (or XWayland), fontconfig, FreeType and the X11 libraries above.
-X11 supports the global gesture toolbar. A native Wayland session has additional
-input restrictions; use the drop window and file-manager actions if needed.
-Ubuntu 24.04 is the automated build and smoke-test baseline.
+Ubuntu 24.04:
+sudo apt-get install ca-certificates libc6 libgcc-s1 libgssapi-krb5-2 libicu74 libssl3t64 libstdc++6 tzdata zlib1g libfontconfig1 libfreetype6 libx11-6 libice6 libsm6 libxrandr2 libxkbcommon0 libxi6 libxtst6 libxt6 fonts-noto-cjk python3
+
+Ubuntu 22.04:
+sudo apt-get install ca-certificates libc6 libgcc-s1 libgssapi-krb5-2 libicu70 libssl3 libstdc++6 tzdata zlib1g libfontconfig1 libfreetype6 libx11-6 libice6 libsm6 libxrandr2 libxkbcommon0 libxi6 libxtst6 libxt6 fonts-noto-cjk python3
+
+Later Ubuntu releases ship a newer libicu (find its name with apt-cache search
+libicu). Other distributions use different package names. The desktop needs an
+X11 server (or XWayland), fontconfig, FreeType and the X11 libraries above.
+X11 supports the global gesture toolbar; it needs libXtst and libXt (libxtst6,
+libxt6). A native Wayland session has additional input restrictions; use the
+drop window and file-manager actions, or the experimental setup below.
+
+GNOME Wayland gestures (experimental, GNOME Shell 45–50): the Linux package
+includes the “Filee donut at the cursor” Shell extension. install.sh installs
+it for the current user on GNOME and requests activation. Open Extensions and
+enable it. If it is missing or still running an older version, sign out and
+sign in again, then start Filee and hold Ctrl while dragging a file in Files.
+No input group, sudo, or FILEE_WAYLAND_GESTURES setting is required on GNOME.
+The Triggers page says when Filee is waiting for the extension. The extension
+provides pointer state over a private local socket and places the menu once
+per opening; Filee respects its configured gestures, Pause and excluded apps.
+It does not collect typed keys. Global selection/hold gestures and Tab/wheel
+flipping during a drag are not supplied by this integration. Disabling the
+extension stops detection; FILEE_WAYLAND_GESTURES=0 opts out on GNOME too.
+Updating Filee (in the app or with --upgrade) also updates the extension if
+Filee installed it; sign out and sign in afterwards so GNOME Shell loads it.
+The Triggers page says when the running extension doesn't match Filee.
+install.sh only replaces an extension folder that Filee installed.
+Read GNOME-WAYLAND.md in the package (docs/GNOME-WAYLAND.md in the source) for
+setup, limits and troubleshooting.
+
+Wayland gesture (experimental, KDE Plasma 6 and Hyprland, off by default): Filee reads
+the mouse and keyboard from /dev/input through libinput, and a KWin script or Hyprland
+window rule places the donut at the cursor because Wayland apps cannot place windows.
+It needs libinput, libudev and libwayland-client (libinput10, libudev1 and
+libwayland-client0 on Ubuntu). To turn it on:
+1. Start Filee with FILEE_WAYLAND_GESTURES=1 in its environment, for example
+   with the line FILEE_WAYLAND_GESTURES=1 in ~/.config/environment.d/filee.conf
+   (takes effect after you sign in again).
+2. Add yourself to the input group, then sign out and in. Members of that group
+   can read all keyboard and mouse input from any program they run, so enable
+   this only if you accept that. You may already be in it for other tools.
+     sudo usermod -aG input "$USER"
+3. For KDE Plasma: Install the KWin script and enable it, so it loads at every login:
+     kpackagetool6 --type=KWin/Script --install "${XDG_DATA_HOME:-$HOME/.local/share}/filee/application/kwin/filee-donut"
+     kwriteconfig6 --file kwinrc --group Plugins --key filee-donutEnabled true
+     qdbus6 org.kde.KWin /KWin reconfigure
+   The qdbus tool is qdbus6, qdbus-qt6 or plain qdbus depending on the
+   distribution; use whichever one you have.
+   After updating Filee, upgrade the installed script the same way, with
+   --upgrade instead of --install, then run the reconfigure line again.
+   For Hyprland: Add the floating and placement window rules in ~/.config/hypr/hyprland.conf (or hyprland.lua):
+     windowrulev2 = float, title:^(Filee Donut)$
+     windowrulev2 = move cursor -50% -50%, title:^(Filee Donut)$
+     windowrulev2 = noborder, title:^(Filee Donut)$
+     windowrulev2 = noshadow, title:^(Filee Donut)$
+     windowrulev2 = noblur, title:^(Filee Donut)$
+
+Native Wayland Backend (experimental, off by default):
+By default, Filee runs through XWayland on Wayland desktops for maximum compatibility.
+To opt into the native Wayland backend (Avalonia.Wayland):
+  Start Filee with FILEE_USE_WAYLAND=1 in its environment.
+  (e.g., export FILEE_USE_WAYLAND=1 or set in ~/.config/environment.d/filee.conf).
+Limits: Wayland cannot say which window is under the cursor, so a Ctrl+drag in
+any app opens an invisible donut window. It only shows when files are dragged
+onto it, but it rejects drops that are not files, so Ctrl+drag to copy text in an
+editor or browser can have its drop swallowed near the start point. If that gets
+in the way, change the modifier on the Triggers page, for example to Ctrl+Shift.
+The excluded apps list does not apply on Wayland. Without the KWin script the
+donut opens in the wrong place.
+
+Packages are built and smoke-tested on Ubuntu 24.04 and started on Ubuntu 22.04
+by the automated builds.
 
 rhwp and 7-Zip are bundled. Other engines are installed from Filee settings or
 discovered in the system. Format support depends on available native engines.
@@ -24,6 +110,6 @@ Optional engines can require additional system libraries. In particular, calibre
 may require libxcb-cursor0, libxcb-xinerama0 and other Qt/XCB dependencies.
 
 Dependency references:
-https://learn.microsoft.com/en-us/dotnet/core/install/linux-ubuntu-install#ubuntu-2404
+https://learn.microsoft.com/en-us/dotnet/core/install/linux-ubuntu-install
 https://docs.avaloniaui.net/docs/deployment/linux
 https://calibre-ebook.com/download_linux

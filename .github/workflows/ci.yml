@@ -1,32 +1,107 @@
 # Build, test and style check on every push and pull request.
 name: CI
 
-# Changes to documentation only (Markdown, docs/) skip the build and tests.
+# Changes to documentation and repository metadata only skip the build and tests (see the changes job).
 on:
   push:
     branches: [main]
-    paths-ignore: ['**/*.md', 'docs/**']
   pull_request:
-    paths-ignore: ['**/*.md', 'docs/**']
 
 permissions:
   contents: read
 
-# One run per branch or pull request: a newer push cancels the run it replaces.
+# A newer push to a pull request cancels the run it replaces. Every push to main runs to the end (its own group), so
+# a docs-only merge can't cancel the run that checks the code merged before it, macOS included.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides what the change needs. The workflow always runs, so the required build check always reports: a job
+  # skipped by its condition counts as passed for the branch rules.
+  # - code: anything besides documentation and repository metadata. When the file list can't be read, everything runs.
+  # - macos: the macOS packages and tests. macOS runners are few and queue, so a pull request runs them only when it
+  #   touches macOS files, code that branches on macOS, the projects, packages or build scripts, or carries the
+  #   `macos` label (add it, then re-run the workflow). Pushes to main always run them.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.files.outputs.code }}
+      macos: ${{ steps.files.outputs.macos }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          everything() { echo "code=true" >> "$GITHUB_OUTPUT"; echo "macos=true" >> "$GITHUB_OUTPUT"; echo "$1"; exit 0; }
+
+          if [ -n "$PR" ]; then
+            files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename') || everything "File list unreadable"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            # The compare API lists at most 300 files.
+            files=$(gh api "repos/$REPO/compare/$BEFORE...$AFTER" \
+              --jq 'if (.files | length) >= 300 then "(too many)" else .files[].filename end') || everything "File list unreadable"
+          else
+            everything "No earlier commit to compare with"
+          fi
+          if [ "$files" = "(too many)" ]; then everything "Too many files to list"; fi
+
+          code=false
+          macos=false
+          if [ -z "$PR" ]; then
+            macos=true
+          else
+            labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name') || labels=macos
+            if grep -qx macos <<< "$labels"; then macos=true; echo "Labelled macos"; fi
+          fi
+
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              *.md|docs/*|LICENSE|.mailmap|.github/CODEOWNERS|.github/ISSUE_TEMPLATE/*|.github/labeler.yml|.github/FUNDING.yml)
+                continue ;;
+            esac
+            if [ "$code" = false ]; then echo "Needs the build: $f"; fi
+            code=true
+            if [ "$macos" = true ]; then continue; fi
+            case "$f" in
+              .github/workflows/*|build/*|installer/macos/*|*MacOS*|*.csproj|*.props|*.targets|*.slnx|global.json|src/Filee.Engines/Infrastructure/engines.json)
+                macos=true ;;
+              *.cs|*.axaml)
+                # Shared code with a macOS branch. A deleted file has no content and only counts by its name.
+                if [ -f "$f" ] && grep -qE 'IsMacOS|OSPlatform\.OSX|"osx' "$f"; then macos=true; fi ;;
+            esac
+            if [ "$macos" = true ]; then echo "Needs macOS: $f"; fi
+          done <<< "$files"
+
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "macos=$macos" >> "$GITHUB_OUTPUT"
+
   portable:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     uses: ./.github/workflows/portable.yml
+    with:
+      macos: ${{ needs.changes.outputs.macos != 'false' }}
 
   build:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -49,7 +124,7 @@ jobs:
       # downloaded once and not on every run. Release builds restore the same cache.
       - name: Restore Zig toolchain
         id: zig
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: build/.cache/zig-x86_64-windows-0.16.0
           key: zig-0.16.0-x86_64-windows
@@ -60,7 +135,7 @@ jobs:
 
       - name: Save Zig toolchain
         if: steps.zig.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: build/.cache/zig-x86_64-windows-0.16.0
           key: zig-0.16.0-x86_64-windows
@@ -79,14 +154,15 @@ jobs:
       - name: Test
         run: dotnet test Filee.slnx --no-build -c Release --filter "FullyQualifiedName!~Filee.App.Tests" --logger "trx" --results-directory TestResults
 
-      # Compiles installer/Filee.iss against a stub app without compression: catches script errors in about a minute.
-      - name: Check installer script
+      # Builds Setup (src/Filee.Setup) around a stub app and runs it in a sandbox: install, update and uninstall into a
+      # scratch folder with a registry file of its own, without administrator rights.
+      - name: Check the installer
         shell: pwsh
         run: ./build/build-installer.ps1 -CheckOnly
 
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-windows
           path: TestResults/
@@ -94,8 +170,10 @@ jobs:
 
       - name: Upload UI screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ui-screenshots
-          path: tests/Filee.App.Tests/bin/Release/net10.0/screenshots/
+          path: |
+            tests/Filee.App.Tests/bin/Release/net10.0/screenshots/
+            tests/Filee.Setup.Tests/bin/Release/net10.0/screenshots/
           if-no-files-found: ignore

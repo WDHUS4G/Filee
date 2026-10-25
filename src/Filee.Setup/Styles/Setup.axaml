@@ -1,0 +1,153 @@
+<!-- Setup's card on top of Filee's Soft.axaml: big soft buttons, the Options sheet, the window chrome. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Styles.Resources>
+    <StreamGeometry x:Key="Setup.Close">M1,1 L11,11 M11,1 L1,11</StreamGeometry>
+    <StreamGeometry x:Key="Setup.Minimize">M1,6 L11,6</StreamGeometry>
+    <StreamGeometry x:Key="Setup.ChevronDown">M1,1 L6,6 L11,1</StreamGeometry>
+    <StreamGeometry x:Key="Setup.ChevronUp">M1,6 L6,1 L11,6</StreamGeometry>
+  </Styles.Resources>
+
+  <!-- Windows' CJK UI fonts (Malgun Gothic, Yu Gothic UI, Microsoft YaHei) have no semibold face: titles are bold, so
+       Korean, Japanese and Chinese titles look as heavy as Latin ones. -->
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="TextBlock.heading">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="TextBlock.h1, TextBlock.h2">
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+
+  <!-- The card: rounded, with a soft shadow; the window around it is transparent. -->
+  <Style Selector="Border.setupcard">
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusLarge}" />
+    <Setter Property="BoxShadow" Value="0 10 30 0 #33000000, 0 2 8 0 #1A000000" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <!-- Window buttons. -->
+  <Style Selector="Button.chrome">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Focusable" Value="True" />
+  </Style>
+  <Style Selector="Button.chrome Path">
+    <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="StrokeThickness" Value="1.4" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+  </Style>
+  <Style Selector="Button.chrome.close:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DangerBrush}" />
+  </Style>
+  <Style Selector="Button.chrome.close:pointerover Path">
+    <Setter Property="Stroke" Value="White" />
+  </Style>
+
+  <!-- The one big button of each state. -->
+  <Style Selector="Button.big">
+    <Setter Property="MinWidth" Value="200" />
+    <Setter Property="MinHeight" Value="46" />
+    <Setter Property="Padding" Value="28,10" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.soft">
+    <Setter Property="MinWidth" Value="120" />
+    <Setter Property="MinHeight" Value="46" />
+    <Setter Property="Padding" Value="22,10" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.link">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Foreground" Value="{DynamicResource Setup.LinkBrush}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.link Path">
+    <Setter Property="Stroke" Value="{DynamicResource Setup.LinkBrush}" />
+    <Setter Property="StrokeThickness" Value="1.6" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+  </Style>
+
+  <Style Selector="Border.pill">
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="9,2" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.pill > TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource Setup.LinkBrush}" />
+  </Style>
+
+  <!-- The Options sheet slides up from the bottom of the card. -->
+  <Style Selector="Border.sheet">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusLarge}" />
+    <Setter Property="BoxShadow" Value="0 -6 24 0 #26000000" />
+    <Setter Property="RenderTransform" Value="translateY(460px)" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.38" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.sheet.open">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+
+  <!-- Options: one checkbox per row, its text wrapping in long languages. -->
+  <Style Selector="CheckBox.option">
+    <Setter Property="Margin" Value="0,1" />
+  </Style>
+  <Style Selector="CheckBox.option TextBlock">
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="Border.clip">
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadius}" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="BoxShadow" Value="0 6 22 0 #22000000" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+  </Style>
+
+  <Style Selector="Border.warning">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusSmall}" />
+    <Setter Property="Padding" Value="12,8" />
+  </Style>
+
+  <!-- Without animations: no slide, no springy buttons. -->
+  <Style Selector="Window.reduced-motion Border.sheet">
+    <Setter Property="Transitions" Value="{x:Null}" />
+  </Style>
+  <Style Selector="Window.reduced-motion :is(Button)">
+    <Setter Property="Transitions" Value="{x:Null}" />
+  </Style>
+  <Style Selector="Window.reduced-motion Button:pressed">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+</Styles>

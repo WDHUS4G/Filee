@@ -34,7 +34,7 @@
 
         <StackPanel>
           <TextBlock Classes="label" Text="{DynamicResource presets.name}" />
-          <TextBox x:Name="NameBox" Text="{Binding Name}" />
+          <TextBox x:Name="NameBox" Text="{Binding Name}" AutomationProperties.Name="{DynamicResource presets.name}" />
           <TextBlock Classes="caption danger" Text="{Binding NameError}" Margin="2,4,0,0"
                      IsVisible="{Binding NameError, Converter={x:Static ObjectConverters.IsNotNull}}" />
         </StackPanel>
@@ -54,15 +54,15 @@
                   <Border Classes="chip" HorizontalAlignment="Stretch">
                     <DockPanel>
                       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2">
-                        <Button Classes="icon" ToolTip.Tip="{DynamicResource group.move_up}"
+                        <Button Classes="icon" ToolTip.Tip="{DynamicResource group.move_up}" AutomationProperties.Name="{DynamicResource group.move_up}"
                                 Command="{Binding $parent[ItemsControl].((vm:GroupEditorViewModel)DataContext).MoveUpCommand}" CommandParameter="{Binding}">
                           <PathIcon Width="12" Height="12" Data="{StaticResource Icon.ArrowUp}" />
                         </Button>
-                        <Button Classes="icon" ToolTip.Tip="{DynamicResource group.move_down}"
+                        <Button Classes="icon" ToolTip.Tip="{DynamicResource group.move_down}" AutomationProperties.Name="{DynamicResource group.move_down}"
                                 Command="{Binding $parent[ItemsControl].((vm:GroupEditorViewModel)DataContext).MoveDownCommand}" CommandParameter="{Binding}">
                           <PathIcon Width="12" Height="12" Data="{StaticResource Icon.ArrowDown}" />
                         </Button>
-                        <Button Classes="icon" ToolTip.Tip="{DynamicResource group.remove}"
+                        <Button Classes="icon" ToolTip.Tip="{DynamicResource group.remove}" AutomationProperties.Name="{DynamicResource group.remove}"
                                 Command="{Binding $parent[ItemsControl].((vm:GroupEditorViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}">
                           <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
                         </Button>

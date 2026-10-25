@@ -69,6 +69,8 @@ public sealed class WatchRule
         applied.Output.Location = OutputLocation.CustomFolder;
         applied.Output.CustomFolder = ResolvedOutputFolder;
         applied.Output.KeepFoldersFrom = Folder;
+        // A watch folder never replaces what it watches: the result would be converted again.
+        applied.Output.ReplaceOriginal = false;
         if (!string.IsNullOrWhiteSpace(FileNamePattern))
             applied.Output.FileNamePattern = FileNamePattern.Trim();
         // Steps without a pattern are being typed; leaving them out keeps the name as it is.

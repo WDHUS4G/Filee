@@ -16,6 +16,7 @@ public partial class SponsorWindow : Window
     {
         InitializeComponent();
         Motion.Track(this);
+        UiZoom.Track(this);
     }
 
     /// <summary>The window with the ways for <paramref name="loc"/>'s language, the one that suits it first.</summary>

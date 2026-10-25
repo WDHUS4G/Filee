@@ -48,6 +48,13 @@ internal static partial class NativeMethods
     [LibraryImport("user32.dll")]
     public static partial int GetSystemMetrics(int index);
 
+    [LibraryImport("kernel32.dll")]
+    public static partial nint GetCurrentProcess();
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetProcessWorkingSetSize(nint process, nint minimumSize, nint maximumSize);
+
     [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SystemParametersInfo(uint action, uint param, [MarshalAs(UnmanagedType.Bool)] out bool value, uint winIni);
@@ -77,6 +84,67 @@ internal static partial class NativeMethods
 
     [LibraryImport("kernel32.dll")]
     public static unsafe partial int PackageFamilyNameFromId(PACKAGE_ID* packageId, ref uint packageFamilyNameLength, char* packageFamilyName);
+
+    // Tokens and integrity levels (Elevation).
+    public const uint TOKEN_QUERY = 0x0008;
+    public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    public const int TokenElevation = 20;
+    public const int TokenIntegrityLevel = 25;
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    public static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inheritHandle, uint processId);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CloseHandle(nint handle);
+
+    [LibraryImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool OpenProcessToken(nint process, uint access, out nint token);
+
+    [LibraryImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static unsafe partial bool GetTokenInformation(nint token, int informationClass, void* information, uint length, out uint returnLength);
+
+    /// <summary>Pointer to the sub-authority count (a byte) inside a SID.</summary>
+    [LibraryImport("advapi32.dll")]
+    public static partial nint GetSidSubAuthorityCount(nint sid);
+
+    /// <summary>Pointer to sub-authority <paramref name="index"/> (a DWORD) inside a SID.</summary>
+    [LibraryImport("advapi32.dll")]
+    public static partial nint GetSidSubAuthority(nint sid, uint index);
+
+    /// <summary>The desktop window of the shell (Explorer's Progman), or 0 when no shell runs.</summary>
+    [LibraryImport("user32.dll")]
+    public static partial nint GetShellWindow();
+
+    [LibraryImport("user32.dll", EntryPoint = "FindWindowExW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint FindWindowEx(nint parent, nint childAfter, string? className, string? windowName);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindowVisible(nint hwnd);
+
+    public const uint MB_OK = 0x0, MB_ICONWARNING = 0x30, MB_SETFOREGROUND = 0x10000, MB_TOPMOST = 0x40000;
+
+    [LibraryImport("user32.dll", EntryPoint = "MessageBoxW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int MessageBox(nint owner, string text, string caption, uint type);
+
+    /// <summary>OPENASINFO for <see cref="SHOpenWithDialog"/>: the file (a UTF-16 string) and what the dialog may do.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct OPENASINFO
+    {
+        public nint File;
+        public nint Class;
+        public uint Flags;
+    }
+
+    /// <summary>Lets the dialog offer "always use this app"; registers the choice; opens the file with the app picked.</summary>
+    public const uint OAIF_ALLOW_REGISTRATION = 0x1, OAIF_REGISTER_EXT = 0x2, OAIF_EXEC = 0x4;
+
+    /// <summary>The shell's "Open with" dialog. Blocks until it closes; returns an HRESULT (cancelled is an error).</summary>
+    [LibraryImport("shell32.dll")]
+    public static partial int SHOpenWithDialog(nint owner, in OPENASINFO info);
 
     /// <summary>Returns the Win32 class name of a window ("CabinetWClass" for Explorer, ...).</summary>
     public static string ClassNameOf(nint hwnd)

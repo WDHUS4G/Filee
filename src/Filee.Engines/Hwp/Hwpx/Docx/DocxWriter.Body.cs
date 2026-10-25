@@ -6,6 +6,7 @@
 // (CT_PPr, CT_RPr, CT_SectPr, CT_TblPr, CT_TcPr), which Word enforces.
 
 using System.Text;
+using Filee.Engines.Infrastructure;
 
 namespace Filee.Engines.Hwp.Hwpx.Docx;
 
@@ -209,7 +210,7 @@ internal sealed partial class DocxWriter
         return sb.Append("</w:p>").ToString();
     }
 
-    /// <summary>w:pPr in CT_PPr order: pStyle, keepNext, keepLines, pageBreakBefore, widowControl, numPr, tabs, spacing, ind, jc, rPr, sectPr.</summary>
+    /// <summary>w:pPr in CT_PPr order: pStyle, keepNext, keepLines, pageBreakBefore, widowControl, numPr, tabs, bidi, spacing, ind, jc, rPr, sectPr.</summary>
     private string ParagraphProperties(HParagraph paragraph, string? style, bool heading, string? sectPr, RunContext context)
     {
         var format = paragraph.Format;
@@ -254,6 +255,10 @@ internal sealed partial class DocxWriter
             }
             sb.Append("</w:tabs>");
         }
+
+        // Right to left: w:ind's left / right and w:jc's left / right then mean the start and the end side.
+        if (format.RightToLeft == true)
+            sb.Append("<w:bidi/>");
 
         var spacing = new StringBuilder();
         if (format.Before is { } before)
@@ -367,7 +372,8 @@ internal sealed partial class DocxWriter
     {
         if (text.Length == 0)
             return;
-        sb.Append("<w:r>").Append(RunPr(format, context));
+        // Arabic or Hebrew text is marked right to left, as Word does: it then takes the complex script font and size.
+        sb.Append("<w:r>").Append(RunPr(format, context, rightToLeft: ComplexScripts.Direction(text) < 0));
         var start = 0;
         for (var i = 0; i <= text.Length; i++)
         {
@@ -387,14 +393,14 @@ internal sealed partial class DocxWriter
         sb.Append("</w:r>");
     }
 
-    private static string RunPr(HCharFormat format, RunContext context, string? characterStyle = null)
+    private static string RunPr(HCharFormat format, RunContext context, string? characterStyle = null, bool rightToLeft = false)
     {
-        var properties = RunProperties(format, context, characterStyle);
+        var properties = RunProperties(format, context, characterStyle, rightToLeft);
         return properties.Length == 0 ? "" : $"<w:rPr>{properties}</w:rPr>";
     }
 
     /// <summary>Content of w:rPr in CT_RPr order.</summary>
-    private static string RunProperties(HCharFormat format, RunContext context, string? characterStyle = null)
+    private static string RunProperties(HCharFormat format, RunContext context, string? characterStyle = null, bool rightToLeft = false)
     {
         var sb = new StringBuilder();
         characterStyle ??= context.Link ? "Hyperlink" : null;
@@ -445,6 +451,8 @@ internal sealed partial class DocxWriter
             sb.Append("<w:vertAlign w:val=\"superscript\"/>");
         else if (format.Subscript == true)
             sb.Append("<w:vertAlign w:val=\"subscript\"/>");
+        if (rightToLeft)
+            sb.Append("<w:rtl/>");
         return sb.ToString();
     }
 
@@ -592,6 +600,8 @@ internal sealed partial class DocxWriter
         }
         if (Hex(cell.Fill) is { } fill)
             sb.Append($"<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"{fill}\"/>");
+        if (cell.CellMargin is { } m)
+            sb.Append($"<w:tcMar><w:top w:w=\"{Number(Twips(m.Top))}\" w:type=\"dxa\"/><w:left w:w=\"{Number(Twips(m.Left))}\" w:type=\"dxa\"/><w:bottom w:w=\"{Number(Twips(m.Bottom))}\" w:type=\"dxa\"/><w:right w:w=\"{Number(Twips(m.Right))}\" w:type=\"dxa\"/></w:tcMar>");
         if (cell.VerticalAlign != HVerticalAlign.Top)
             sb.Append($"<w:vAlign w:val=\"{(cell.VerticalAlign == HVerticalAlign.Center ? "center" : "bottom")}\"/>");
         sb.Append("</w:tcPr>").Append(content);

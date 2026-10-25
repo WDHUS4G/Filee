@@ -60,15 +60,15 @@ internal sealed class SvgDxfWriter
     /// <summary>Number of entities written (for tests and the log).</summary>
     public int EntityCount { get; private set; }
 
-    /// <summary>Writes <paramref name="drawing"/> to <paramref name="output"/> as DXF (AutoCAD 2018).</summary>
+    /// <summary>Writes <paramref name="drawing"/> to <paramref name="output"/> as DXF, in the preset's version (AutoCAD 2018 by default).</summary>
     /// <exception cref="InvalidDataException">The drawing has no outlines to write.</exception>
-    public static void Write(SvgRenderer.Drawing drawing, string output, CancellationToken ct)
+    public static void Write(SvgRenderer.Drawing drawing, string output, CancellationToken ct, Core.Presets.CadVersion version = Core.Presets.CadVersion.AutoCad2018)
     {
         var writer = new SvgDxfWriter(drawing, ct);
         writer.Collect();
         if (writer.EntityCount == 0)
             throw new InvalidDataException("The SVG has no shapes that can be written as CAD geometry (only images or empty groups).");
-        CadFile.Write(writer._document, output, "dxf");
+        CadFile.Write(writer._document, output, "dxf", version);
     }
 
     private void Collect()

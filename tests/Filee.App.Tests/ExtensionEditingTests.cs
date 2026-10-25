@@ -1,5 +1,6 @@
 // Logic behind the donut editor's extension chips and the mixed-selection check list (no UI needed).
 
+using System.Globalization;
 using Filee.App.Controls;
 using Filee.App.ViewModels.Pages;
 using Filee.Core.Localization;
@@ -93,7 +94,13 @@ public class ExtensionTagsViewModelTests
     private readonly ToolbarProfile _mixed = new() { Id = "mixed", Name = "Mixed", IsFallback = true, Extensions = ["bmp"] };
     private int _saves;
 
-    private ExtensionTagsViewModel Create() => new(_mine, [_images, _mine, _later, _mixed], new KeyLocalizer(), () => _saves++);
+    private ExtensionTagsViewModel Create()
+    {
+        // The texts wrap extensions in left-to-right marks when the UI culture reads right to left; a test that switched
+        // the app to Arabic may have left that culture behind.
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
+        return new(_mine, [_images, _mine, _later, _mixed], new KeyLocalizer(), () => _saves++);
+    }
 
     [Fact]
     public void Adds_normalized_extensions_and_saves()

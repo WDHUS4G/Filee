@@ -39,8 +39,9 @@
                             AutomationProperties.Name="{Binding Text}" AutomationProperties.HelpText="{Binding ToolTip}">
                       <StackPanel Orientation="Horizontal" Spacing="3">
                         <PathIcon Classes="tagchip-flag" Data="{StaticResource Icon.Alert}" IsVisible="{Binding IsWarning}" />
-                        <TextBlock Classes="tagchip-text" Text="{Binding Text}" />
-                        <Button Classes="tagchip-remove" Focusable="False" ToolTip.Tip="{DynamicResource tags.remove}">
+                        <!-- Extensions, name patterns and app names read left to right, also in Arabic (else "*.jpg" shows as "jpg.*"). -->
+                        <TextBlock Classes="tagchip-text" Text="{Binding Text}" FlowDirection="LeftToRight" />
+                        <Button Classes="tagchip-remove" Focusable="False" ToolTip.Tip="{DynamicResource tags.remove}" AutomationProperties.Name="{DynamicResource tags.remove}">
                           <PathIcon Width="8" Height="8" Data="{StaticResource Icon.Close}" />
                         </Button>
                       </StackPanel>
@@ -64,7 +65,8 @@
                       <DockPanel>
                         <TextBlock DockPanel.Dock="Right" Classes="caption tag-suggestion-note" Text="{Binding Note}"
                                    Margin="12,0,0,0" VerticalAlignment="Center" />
-                        <TextBlock DockPanel.Dock="Left" Text="{Binding Text}" FontWeight="SemiBold" MinWidth="64" VerticalAlignment="Center" />
+                        <TextBlock DockPanel.Dock="Left" Text="{Binding Text}" FontWeight="SemiBold" MinWidth="64" VerticalAlignment="Center"
+                                   FlowDirection="LeftToRight" />
                         <TextBlock Classes="caption" Text="{Binding Detail}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                       </DockPanel>
                     </DataTemplate>

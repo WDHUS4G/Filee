@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Filee.Platform.MacOS;
 
@@ -37,8 +39,42 @@ public sealed class MacOSIntegrationTests
         // Each translation names the same menu title.
         foreach (var strings in Directory.GetFiles(installer, "ServicesMenu.strings", SearchOption.AllDirectories))
             Assert.StartsWith($"\"{MacOSServicesProvider.MenuItem}\" = ", File.ReadAllLines(strings).Single(l => l.StartsWith('"')));
-        Assert.Equal(3, Directory.GetFiles(installer, "ServicesMenu.strings", SearchOption.AllDirectories).Length);
+        var declared = Property(root, "CFBundleLocalizations").Elements("string").Select(x => x.Value).Order();
+        var folders = Directory.GetFiles(installer, "ServicesMenu.strings", SearchOption.AllDirectories)
+            .Select(path => Path.GetFileNameWithoutExtension(Path.GetDirectoryName(path)!)).Order();
+        Assert.Equal(declared, folders);
     }
+
+    [Theory]
+    [InlineData("pt-PT", "ficheiros", "deteta", "arquivos")]
+    [InlineData("pt-BR", "arquivos", "detecta", "ficheiros")]
+    public void PortugueseNativeTextsKeepTheirVariantAndMatchTheApp(string language, string files, string detects, string otherFiles)
+    {
+        var repository = RepositoryRoot();
+        var installer = Path.Combine(repository, "installer", "macos");
+        var root = ReadPlist(File.ReadAllText(Path.Combine(installer, "Info.plist")));
+        Assert.Contains(language, Property(root, "CFBundleLocalizations").Elements("string").Select(x => x.Value));
+        var folder = Path.Combine(installer, language + ".lproj");
+        var menu = ReadStrings(Path.Combine(folder, "ServicesMenu.strings"));
+        using var app = JsonDocument.Parse(File.ReadAllText(Path.Combine(repository, "src", "Filee.App", "Assets", "i18n", language + ".json")));
+        Assert.Equal(app.RootElement.GetProperty("general.context_menu_label").GetString(), menu[MacOSServicesProvider.MenuItem]);
+
+        var permissions = ReadStrings(Path.Combine(folder, "InfoPlist.strings"));
+        Assert.Equal(2, permissions.Count);
+        foreach (var (key, value) in permissions)
+        {
+            Assert.NotEqual(Property(root, key).Value, value);
+            Assert.StartsWith("O Filee ", value);
+            Assert.True(value.IsNormalized(), $"{language}: {key} is not NFC");
+        }
+        Assert.Contains(files, permissions["NSAppleEventsUsageDescription"]);
+        Assert.DoesNotContain(otherFiles, permissions["NSAppleEventsUsageDescription"]);
+        Assert.Contains(detects, permissions["NSInputMonitoringUsageDescription"]);
+    }
+
+    private static Dictionary<string, string> ReadStrings(string path) =>
+        Regex.Matches(File.ReadAllText(path).ReplaceLineEndings("\n"), "^\"([^\"]+)\" = \"([^\"]+)\";$", RegexOptions.Multiline)
+            .ToDictionary(match => match.Groups[1].Value, match => match.Groups[2].Value);
 
     private static string RepositoryRoot()
     {

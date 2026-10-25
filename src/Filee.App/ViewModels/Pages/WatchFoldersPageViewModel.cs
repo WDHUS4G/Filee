@@ -29,7 +29,7 @@ public sealed partial class WatchFoldersPageViewModel : ObservableObject, IDispo
         _service = service;
         _loc = loc;
         _conversions = conversions;
-        Presets = store.Presets.Where(p => !p.IsGroup).Select(p => new Choice<string>(p.Id, loc.DisplayName(p), FormatLabels.NameOf(loc, p.TargetFormat))).ToList();
+        Presets = store.Presets.Where(p => !p.IsGroup && !p.IsTool).Select(p => new Choice<string>(p.Id, loc.DisplayName(p), FormatLabels.NameOf(loc, p.TargetFormat))).ToList();
         OriginalsChoices =
         [
             new Choice<AfterConversion>(AfterConversion.Keep, loc["watch.originals_keep"]),
@@ -333,10 +333,19 @@ public sealed partial class WatchRuleViewModel : ObservableObject
 
     partial void OnEnabledChanged(bool value) => Change(r => r.Enabled = value);
     partial void OnFolderChanged(string value) => Change(r => r.Folder = value.Trim());
-    partial void OnPresetChanged(Choice<string>? value) => Change(r => r.PresetId = value?.Value ?? "");
+    // Null only while no preset was found for the rule (deleted); the combo box clearing itself doesn't forget the preset.
+    partial void OnPresetChanged(Choice<string>? oldValue, Choice<string>? newValue)
+    {
+        if (!Choices.Restore(oldValue, newValue, v => Preset = v))
+            Change(r => r.PresetId = newValue?.Value ?? "");
+    }
     partial void OnIncludeSubfoldersChanged(bool value) => Change(r => r.IncludeSubfolders = value);
     partial void OnOutputFolderChanged(string value) => Change(r => r.OutputFolder = value.Trim());
-    partial void OnOriginalsChanged(Choice<AfterConversion> value) => Change(r => r.Originals = value.Value);
+    partial void OnOriginalsChanged(Choice<AfterConversion>? oldValue, Choice<AfterConversion> newValue)
+    {
+        if (!Choices.Restore(oldValue, newValue, v => Originals = v))
+            Change(r => r.Originals = newValue.Value);
+    }
 
     partial void OnIncludeTextChanged(string value)
     {

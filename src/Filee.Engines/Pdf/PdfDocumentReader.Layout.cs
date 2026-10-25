@@ -191,18 +191,27 @@ internal sealed partial class PdfDocumentReader
     {
         var last = item.Lines[^1];
         var em = line.Size;
-        if (ListStart.IsMatch(line.Words[0].Text))
+        if (ListStart.IsMatch(line.First.Text))
             return true;
+        var listItem = ListStart.IsMatch(item.Lines[0].First.Text) || item.Lines[0].Tabs.Count > 0;
+        var firstWord = line.First.Right - line.First.Left;
+        if (line.RightToLeft && last.RightToLeft)
+        {
+            // The same, mirrored: right-to-left lines start at the right.
+            var bodyRight = item.Lines.Count > 1 ? item.Lines.Skip(1).Max(l => l.Right) : last.Right;
+            if (line.Right < bodyRight - 0.8 * em && !listItem && (item.Lines.Count > 1 || line.Right < last.Right - 0.8 * em))
+                return true;
+            var start = Math.Min(item.Left, line.Left);
+            return last.Left - 0.3 * em - firstWord > start + 0.5 * em && item.Right - start > 10 * em;
+        }
 
         // First-line indent: this line starts further right than the paragraph's other lines.
         var bodyLeft = item.Lines.Count > 1 ? item.Lines.Skip(1).Min(l => l.Left) : last.Left;
-        var listItem = ListStart.IsMatch(item.Lines[0].Words[0].Text) || item.Lines[0].Tabs.Count > 0;
         if (line.Left > bodyLeft + 0.8 * em && !listItem && (item.Lines.Count > 1 || line.Left > last.Left + 0.8 * em))
             return true;
 
         // The previous line ended although the next word would have fitted: the paragraph ended there.
         var right = Math.Max(item.Right, line.Right);
-        var firstWord = line.Words[0].Right - line.Words[0].Left;
         return last.Right + 0.3 * em + firstWord < right - 0.5 * em && right - item.Left > 10 * em;
     }
 

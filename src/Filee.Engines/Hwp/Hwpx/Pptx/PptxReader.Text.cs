@@ -113,14 +113,15 @@ internal sealed partial class PptxReader
                 if (text.Length == 0)
                     continue;
                 var link = ExternalLink(partPath, (string?)run.Element(A + "rPr")?.Element(A + "hlinkClick")?.Attribute(R + "id"));
+                // Text in Wingdings & co. as the Unicode characters it shows.
                 if (link is null)
                 {
-                    paragraph.Inlines.Add(new HText(text, format));
+                    paragraph.Inlines.AddRange(SymbolFonts.Runs(text, format));
                 }
                 else
                 {
                     var hLink = new HLink(link);
-                    hLink.Content.Add(new HText(text, format));
+                    hLink.Content.AddRange(SymbolFonts.Runs(text, format));
                     paragraph.Inlines.Add(hLink);
                 }
             }
@@ -222,7 +223,12 @@ internal sealed partial class PptxReader
             if (style.Element(A + "buNone") is not null)
                 return null;
             if (style.Element(A + "buChar") is { } character)
-                return new BulletInfo((string?)character.Attribute("char") ?? "•", null, 1);
+            {
+                // "§" in Wingdings is ▪, "ü" ✓: a bullet in a symbol font as the Unicode character it shows.
+                var text = (string?)character.Attribute("char") ?? "•";
+                var font = chain.Select(s => s.Element(A + "buFont") ?? s.Element(A + "buFontTx")).FirstOrDefault(f => f is not null);
+                return new BulletInfo(SymbolFonts.Map((string?)font?.Attribute("typeface"), text) ?? text, null, 1);
+            }
             if (style.Element(A + "buAutoNum") is { } number)
                 return new BulletInfo(null, (string?)number.Attribute("type") ?? "arabicPeriod",
                     int.TryParse((string?)number.Attribute("startAt"), out var start) ? start : 1);

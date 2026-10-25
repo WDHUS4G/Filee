@@ -103,6 +103,9 @@ internal sealed class XlsxBuilder
         return this;
     }
 
+    /// <summary>A <c>definedNames</c> element for the workbook (print titles, print areas), or empty.</summary>
+    public string DefinedNames { get; set; } = "";
+
     public string Save(string path)
     {
         var parts = new Dictionary<string, string>
@@ -110,7 +113,7 @@ internal sealed class XlsxBuilder
             ["_rels/.rels"] = OpcWriter.Relationships([("rId1", "officeDocument", "xl/workbook.xml")]),
             ["xl/workbook.xml"] = $"<workbook {Namespaces}><sheets>" +
                                   string.Concat(_sheets.Select((s, i) => $"<sheet name=\"{OpcWriter.Escape(s.Name)}\" sheetId=\"{i + 1}\"{(s.Hidden ? " state=\"hidden\"" : "")} r:id=\"rId{i + 1}\"/>")) +
-                                  "</sheets></workbook>",
+                                  "</sheets>" + DefinedNames + "</workbook>",
             ["xl/_rels/workbook.xml.rels"] = OpcWriter.Relationships(
                 _sheets.Select((_, i) => ($"rId{i + 1}", "worksheet", $"worksheets/sheet{i + 1}.xml"))
                     .Append(("rIdS", "sharedStrings", "sharedStrings.xml"))

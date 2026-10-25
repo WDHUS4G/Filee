@@ -1,4 +1,4 @@
-// Office Open XML variants without Office: DOCM / DOTX / DOTM ↔ DOCX, XLSM / XLTX ↔ XLSX and PPTM / POTX / PPSX ↔ PPTX.
+// Office Open XML variants without Office: DOCM / DOTX / DOTM ↔ DOCX, XLSM / XLTX ↔ XLSX and PPTM / POTX / POTM / PPSX ↔ PPTX.
 // A variant is the same package with another content type for its main part, so the package is copied with that type
 // rewritten. Going to a macro-free type also drops the VBA project, its signatures and data, Word's key map
 // customisations and Excel 4.0 macro sheets, with every relationship pointing to them (Office refuses a macro-free
@@ -32,6 +32,7 @@ public sealed class OoxmlConverter : IConverter
         ["pptx"] = ("powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml", false),
         ["pptm"] = ("powerpoint", "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml", true),
         ["potx"] = ("powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.template.main+xml", false),
+        ["potm"] = ("powerpoint", "application/vnd.ms-powerpoint.template.macroEnabled.main+xml", true),
         ["ppsx"] = ("powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml", false),
     };
 
@@ -60,7 +61,7 @@ public sealed class OoxmlConverter : IConverter
            select new ConversionEdge(source.Key, target.Key),
     ];
 
-    public EngineStatus GetStatus() => EngineStatus.Available("DOCM, DOTX, DOTM ↔ DOCX; XLSM, XLTX ↔ XLSX; PPTM, POTX, PPSX ↔ PPTX", EngineVersions.BuiltIn);
+    public EngineStatus GetStatus() => EngineStatus.Available("DOCM, DOTX, DOTM ↔ DOCX; XLSM, XLTX ↔ XLSX; PPTM, POTX, POTM, PPSX ↔ PPTX", EngineVersions.BuiltIn);
 
     public Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken) =>
         Task.Run<IReadOnlyList<string>>(() =>

@@ -3,6 +3,7 @@
 
 using Filee.Core.Conversion;
 using Filee.Core.Localization;
+using Filee.Core.Platform;
 using Filee.Core.Settings;
 using Filee.Engines;
 using Filee.Engines.Infrastructure;
@@ -36,9 +37,17 @@ internal sealed class CliHost : IAsyncDisposable
         var converters = EngineRegistry.CreateAll(new EngineEnvironment(store.Directory));
         var catalog = new ConverterCatalog(converters) { Priority = store.Settings.EnginePriority };
         var queue = new JobQueue(catalog, EngineRegistry.FindPdfMerger(converters), combiner: EngineRegistry.FindFileCombiner(converters),
-            tiffMerger: EngineRegistry.FindTiffMerger(converters));
+            tiffMerger: EngineRegistry.FindTiffMerger(converters), mediaJoiner: EngineRegistry.FindMediaJoiner(converters),
+            moveToTrash: Trash());
         return new CliHost(store, catalog, queue);
     }
+
+    /// <summary>The system's Recycle Bin / Trash for "Replace the original", as in the app; none elsewhere.</summary>
+    private static Func<string, TrashRefusal?>? Trash() =>
+        OperatingSystem.IsWindows() ? new Filee.Platform.Windows.WindowsPlatformServices().MoveToTrash
+        : OperatingSystem.IsMacOS() ? new Filee.Platform.MacOS.MacOSPlatformServices().MoveToTrash
+        : OperatingSystem.IsLinux() ? new Filee.Platform.Linux.LinuxPlatformServices().MoveToTrash
+        : null;
 
     public ValueTask DisposeAsync() => Queue.DisposeAsync();
 }

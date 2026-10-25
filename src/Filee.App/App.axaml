@@ -16,12 +16,28 @@
         <ResourceInclude Source="avares://Filee/Styles/Icons.axaml" />
         <ResourceInclude Source="avares://Filee/Styles/Brands.axaml" />
       </ResourceDictionary.MergedDictionaries>
+      <!-- The Theme page's colour picker shows only the spectrum: no empty tab strip above it. Set here because its
+           flyout looks resources up outside the page. -->
+      <x:Double x:Key="ColorViewTabStripHeight">0</x:Double>
     </ResourceDictionary>
   </Application.Resources>
 
   <Application.Styles>
     <FluentTheme />
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+    <!-- ColorSpectrum handles arrow keys but does not enable keyboard focus by default. -->
+    <Style Selector="ColorSpectrum">
+      <Setter Property="Focusable" Value="True" />
+    </Style>
+    <!-- The colour picker's flyout (class nopadding) draws a fixed 48 px tab strip background: gone with the strip. -->
+    <Style Selector="FlyoutPresenter.nopadding Border#TabBackgroundBorder">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="FlyoutPresenter.nopadding Border#ContentBackgroundBorder">
+      <Setter Property="Margin" Value="0" />
+    </Style>
     <StyleInclude Source="avares://Filee/Styles/Soft.axaml" />
+    <StyleInclude Source="avares://Filee/Styles/Controls.axaml" />
     <StyleInclude Source="avares://Filee/Styles/TagEditor.axaml" />
   </Application.Styles>
 </Application>

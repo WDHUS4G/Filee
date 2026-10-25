@@ -11,16 +11,17 @@ internal static class ImageEncoder
 {
     /// <summary>
     /// Image formats ImageMagick can read (see <see cref="ImageReader"/> for RAW, layered and metafile sources).
-    /// Camera RAW is decoded by LibRaw; XCF, HEIC, DICOM, Photo CD, OpenEXR and Radiance HDR are read only. EMF/WMF
+    /// Camera RAW is decoded by LibRaw; XCF, HEIC, DICOM, Photo CD, OpenEXR, Radiance HDR and FITS are read only. EMF/WMF
     /// are Windows metafiles, which ImageMagick renders through GDI+ on Windows only (<see cref="Metafiles"/>). APNG is
-    /// read and written by Filee's own <see cref="Apng"/> (its frames decoded and encoded by ImageMagick).
+    /// read and written by Filee's own <see cref="Apng"/> (its frames decoded and encoded by ImageMagick); FITS is read
+    /// by Filee's own <see cref="Fits"/> and written to TIFF by <see cref="FitsRendering"/>.
     /// </summary>
     public static readonly string[] Readable =
     [
         "png", "jpg", "webp", "tiff", "bmp", "gif", "ico", "avif", "heic",
         "jxl", "jp2", "psd", "psb", "tga", "ppm", "xcf", "raw",
         "apng", "mng", "qoi", "dds", "pcx", "cur", "xpm", "xbm", "wbmp", "pam", "pfm", "sgi", "ras", "miff",
-        "dcm", "pcd", "exr", "hdr",
+        "dcm", "pcd", "exr", "hdr", "fits",
     ];
 
     /// <summary>Vector metafiles ImageMagick rasterizes (Windows only: it uses GDI+).</summary>
@@ -50,10 +51,13 @@ internal static class ImageEncoder
     /// The edge an image engine offers from a picture in <paramref name="source"/> to <paramref name="target"/>. GIF
     /// holds 256 colours, so a still picture costs more there: it reaches video through a full-colour PNG instead
     /// (FFmpeg), while animations and multi-page files still go through GIF and keep their frames. Still picture → APNG
-    /// costs as much, so photos never reach video as a one-frame animation.
+    /// costs as much, so photos never reach video as a one-frame animation. FITS → TIFF is the data for further
+    /// processing (linear by default, 16 or 32 bits): it costs a little more, so FITS reaches other formats through a
+    /// stretched PNG or JPG instead.
     /// </summary>
     public static ConversionEdge Edge(string source, string target) =>
-        new(source, target, target is "gif" or "apng" && !MultiFrame.Contains(source) && !Animated.Contains(source) ? 12 : 10);
+        new(source, target, target is "gif" or "apng" && !MultiFrame.Contains(source) && !Animated.Contains(source) ? 12
+            : source == "fits" && target == "tiff" ? 11 : 10);
 
     /// <summary>True when frames of <paramref name="sourceFormat"/> are written as one animation in <paramref name="targetFormat"/>.</summary>
     public static bool KeepsAnimation(string sourceFormat, string targetFormat) =>
@@ -67,6 +71,9 @@ internal static class ImageEncoder
     /// </summary>
     private static readonly HashSet<string> NoAlpha = ["jpg", "ppm", "heic", "xbm", "wbmp", "pfm", "pcx", "ras"];
 
+    /// <summary>False for formats Filee writes without transparency (<see cref="NoAlpha"/>): nothing to trim there.</summary>
+    public static bool HoldsAlpha(string format) => !NoAlpha.Contains(format);
+
     /// <summary>
     /// Formats read with their ImageMagick coder named instead of guessed from the file: some extensions mean another
     /// format to ImageMagick (.rgb and .bw are headerless pixel data there, SGI here) and WBMP has no signature.
@@ -77,9 +84,15 @@ internal static class ImageEncoder
     /// <summary>Formats holding one picture in several sizes (icons) or mipmaps: the largest is converted.</summary>
     private static readonly HashSet<string> SizeVariants = ["ico", "cur", "dds"];
 
-    /// <summary>Every format ImageMagick reads as input: the raster formats plus, on Windows, the metafiles.</summary>
+    /// <summary>Packages of a picture and more, of which the picture is read (<see cref="ImageReader"/>): an iPhone LIVP.</summary>
+    public static readonly string[] Packages = ["livp"];
+
+    /// <summary>
+    /// Every format ImageMagick reads as input: the raster formats, the picture of <see cref="Packages"/> and, on
+    /// Windows, the metafiles.
+    /// </summary>
     public static IEnumerable<string> Sources =>
-        OperatingSystem.IsWindows() ? [.. Readable, .. Metafiles] : Readable;
+        OperatingSystem.IsWindows() ? [.. Readable, .. Packages, .. Metafiles] : [.. Readable, .. Packages];
 
     public static MagickFormat ToMagickFormat(string formatId) => formatId switch
     {
@@ -219,6 +232,36 @@ internal static class ImageEncoder
             image.Flip();
     }
 
+    /// <summary>
+    /// Crops <paramref name="image"/> to the box around its pixels that aren't fully transparent (issue #332). Unlike
+    /// ImageMagick's Trim, which trims whatever colour the corners have, only transparency counts: a picture whose content
+    /// touches a corner keeps its solid border. Nothing changes without transparency, or when every pixel is transparent.
+    /// </summary>
+    public static void TrimTransparentBorders(IMagickImage<byte> image)
+    {
+        if (!image.HasAlpha)
+            return;
+        int width = (int)image.Width, height = (int)image.Height;
+        var rgba = image.GetPixels().ToByteArray(PixelMapping.RGBA)!;
+        int left = width, top = height, right = -1, bottom = -1;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                if (rgba[(y * width + x) * 4 + 3] == 0)
+                    continue;
+                left = Math.Min(left, x);
+                right = Math.Max(right, x);
+                top = Math.Min(top, y);
+                bottom = Math.Max(bottom, y);
+            }
+        }
+        if (right < 0 || (left == 0 && top == 0 && right == width - 1 && bottom == height - 1))
+            return;
+        image.Crop(new MagickGeometry(left, top, (uint)(right - left + 1), (uint)(bottom - top + 1)));
+        image.ResetPage();
+    }
+
     /// <summary>Applies resize / colour / metadata options to one frame.</summary>
     public static void ApplyOptions(IMagickImage<byte> image, ImageOptions options, string targetFormat)
     {
@@ -277,8 +320,12 @@ internal static class ImageEncoder
         var quality = (uint)Math.Clamp(options.Quality, 1, 100);
         // Turning a JPEG has to re-encode it: at the photo's own quality (Magick's estimate when it read the file), not
         // above it, or a phone photo saved at 75 comes back at 95, bigger and no better.
-        if (options.TurnsOrMirrors && targetFormat == "jpg" && image.Format == MagickFormat.Jpeg && image.Quality is > 0 and <= 100)
-            quality = Math.Min(quality, image.Quality);
+        // "Compress image" likewise never raises a photo's quality, and "Remove metadata" keeps it as it was.
+        var sourceQuality = targetFormat == "jpg" && image.Format == MagickFormat.Jpeg && image.Quality is > 0 and <= 100 ? image.Quality : 0;
+        if ((options.TurnsOrMirrors || options.MaxCompression) && sourceQuality > 0)
+            quality = Math.Min(quality, sourceQuality);
+        if (options.KeepSourceQuality && sourceQuality > 0)
+            quality = sourceQuality;
         switch (targetFormat)
         {
             case "jpg":
@@ -294,6 +341,11 @@ internal static class ImageEncoder
                 image.Quality = quality;
                 if (options.WebpLossless)
                     image.Settings.SetDefine(MagickFormat.WebP, "lossless", true);
+                break;
+            case "png" when options.MaxCompression:
+                // zlib level 9 with adaptive row filters: the smallest PNG ImageMagick writes, the same pixels.
+                image.Settings.SetDefine(MagickFormat.Png, "compression-level", "9");
+                image.Settings.SetDefine(MagickFormat.Png, "compression-filter", "5");
                 break;
             case "tiff":
                 image.Settings.Compression = options.TiffCompression switch

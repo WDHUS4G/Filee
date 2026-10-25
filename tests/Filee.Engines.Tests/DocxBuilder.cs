@@ -18,6 +18,7 @@ internal sealed class DocxBuilder
         "xmlns:wpg=\"http://schemas.microsoft.com/office/word/2010/wordprocessingGroup\" " +
         "xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" " +
         "xmlns:v=\"urn:schemas-microsoft-com:vml\" " +
+        "xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\" " +
         "xmlns:w10=\"urn:schemas-microsoft-com:office:word\"";
 
     /// <summary>A4 portrait, 1 inch margins, header/footer 0.5 inch.</summary>

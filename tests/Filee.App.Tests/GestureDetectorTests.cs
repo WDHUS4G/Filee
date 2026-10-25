@@ -137,4 +137,74 @@ public class GestureDetectorTests
         detector.HoldElapsed(token);
         Assert.Equal(1, held);
     }
+
+    [Fact]
+    public void Drag_and_hold_on_the_same_press_both_wait_for_what_the_pointer_does()
+    {
+        // #450: with Drag listed first, a Hold on the same button and modifiers was never armed.
+        var drag = new TriggerGesture { Kind = TriggerKind.Drag, Modifiers = ModifierKeys.Ctrl, Button = TriggerMouseButton.Left };
+        var hold = new TriggerGesture { Kind = TriggerKind.Hold, Modifiers = ModifierKeys.Ctrl, Button = TriggerMouseButton.Left };
+        var detector = Create(drag, hold);
+        long token = 0;
+        int dragged = 0, held = 0;
+        detector.HoldTimerRequested += (t, _) => token = t;
+        detector.DragStarted += (_, _, _) => dragged++;
+        detector.HoldTriggered += (_, _, _) => held++;
+
+        // Held still: the hold fires, and moving on afterwards doesn't start the drag too.
+        detector.MouseDown(TriggerMouseButton.Left, 100, 100, ModifierKeys.Ctrl);
+        Assert.NotEqual(0, token);
+        detector.MouseMove(102, 101, ModifierKeys.Ctrl, TriggerMouseButton.Left); // inside the threshold
+        detector.HoldElapsed(token);
+        detector.MouseMove(180, 100, ModifierKeys.Ctrl, TriggerMouseButton.Left);
+        detector.MouseUp(TriggerMouseButton.Left, 180, 100);
+        Assert.Equal((0, 1), (dragged, held));
+
+        // Moved: the drag fires, and the hold's timer finds nothing to fire.
+        token = 0;
+        detector.MouseDown(TriggerMouseButton.Left, 100, 100, ModifierKeys.Ctrl);
+        detector.MouseMove(150, 100, ModifierKeys.Ctrl, TriggerMouseButton.Left);
+        detector.HoldElapsed(token);
+        detector.MouseUp(TriggerMouseButton.Left, 150, 100);
+        Assert.Equal((1, 1), (dragged, held));
+
+        // The order in the list doesn't matter.
+        detector.Configure([hold, drag]);
+        detector.MouseDown(TriggerMouseButton.Left, 100, 100, ModifierKeys.Ctrl);
+        detector.MouseMove(150, 100, ModifierKeys.Ctrl, TriggerMouseButton.Left);
+        Assert.Equal((2, 1), (dragged, held));
+    }
+
+    [Fact]
+    public void A_drag_out_of_scope_still_lets_its_hold_fire()
+    {
+        var drag = new TriggerGesture { Kind = TriggerKind.Drag, Modifiers = ModifierKeys.Alt, Button = TriggerMouseButton.Left, Scope = TriggerScope.FileManager };
+        var hold = new TriggerGesture { Kind = TriggerKind.Hold, Modifiers = ModifierKeys.Alt, Button = TriggerMouseButton.Left, Scope = TriggerScope.Anywhere };
+        var detector = Create(drag, hold);
+        detector.ScopeFilter = (g, _, _) => g.Scope == TriggerScope.Anywhere;
+        long token = 0;
+        var held = 0;
+        detector.HoldTimerRequested += (t, _) => token = t;
+        detector.HoldTriggered += (_, _, _) => held++;
+
+        detector.MouseDown(TriggerMouseButton.Left, 0, 0, ModifierKeys.Alt);
+        detector.HoldElapsed(token);
+
+        Assert.Equal(1, held);
+    }
+
+    [Fact]
+    public void Of_two_shortcuts_on_one_key_the_one_whose_scope_fits_fires()
+    {
+        var inFileManager = new TriggerGesture { Kind = TriggerKind.KeyChord, Modifiers = ModifierKeys.Ctrl, Key = "Space", Scope = TriggerScope.FileManager };
+        var anywhere = new TriggerGesture { Kind = TriggerKind.KeyChord, Modifiers = ModifierKeys.Ctrl, Key = "Space", Scope = TriggerScope.Anywhere, HoldMilliseconds = 777 };
+        var detector = Create(inFileManager, anywhere);
+        detector.ScopeFilter = (g, _, _) => g.Scope == TriggerScope.Anywhere;
+        TriggerGesture? fired = null;
+        detector.KeyChordTriggered += (g, _, _) => fired = g;
+
+        detector.KeyDown("Space", ModifierKeys.Ctrl);
+
+        Assert.Equal(777, fired?.HoldMilliseconds);
+    }
 }

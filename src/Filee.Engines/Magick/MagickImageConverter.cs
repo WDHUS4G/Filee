@@ -9,7 +9,7 @@ namespace Filee.Engines.Magick;
 /// <summary>
 /// Converts between PNG, JPG, WEBP, TIFF, BMP, GIF, ICO, AVIF, JPEG XL, JPEG 2000, PSD/PSB, TGA, PPM, APNG, MNG, QOI,
 /// DDS, PCX, CUR, XPM, XBM, WBMP, PAM, PFM, SGI, Sun Raster and MIFF, and reads HEIC, XCF, camera RAW, DICOM,
-/// Photo CD, OpenEXR, Radiance HDR and (on Windows) EMF/WMF.
+/// Photo CD, OpenEXR, Radiance HDR, FITS and (on Windows) EMF/WMF.
 /// </summary>
 public sealed class MagickImageConverter : IConverter, ITiffMerger, IImageTransformer
 {
@@ -69,23 +69,47 @@ public sealed class MagickImageConverter : IConverter, ITiffMerger, IImageTransf
     public Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken) =>
         Task.Run<IReadOnlyList<string>>(() =>
         {
+            // FITS → TIFF keeps the file's depth (16 or 32 bits), which the Q8 build can't: Filee writes it.
+            if (step.From == "fits" && step.To == "tiff")
+                return FitsRendering.WriteTiff(step, progress, cancellationToken);
             // Animated PNGs are often saved as .png: read them as APNG, so they stay animated as GIF or WebP.
             var from = step.From == "png" && Apng.IsAnimated(step.InputPath) ? "apng" : step.From;
             using var images = ImageReader.Read(step.InputPath, from, step.Preset);
-            cancellationToken.ThrowIfCancellationRequested();
-            progress?.Report(0.3);
-
-            var frames = ImageEncoder.SelectFrames(images, from, step.To);
-            foreach (var frame in frames)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                ImageEncoder.ApplyOptions(frame, step.Preset.Image, step.To);
-            }
-            progress?.Report(0.7);
-
-            var written = ImageEncoder.Write(frames, step.To, step.Output, step.Preset.Image, step.InputPath,
-                ImageEncoder.KeepsAnimation(from, step.To));
-            progress?.Report(1);
-            return written;
+            return Write(images, from, step, progress, cancellationToken);
         }, cancellationToken);
+
+    /// <summary>
+    /// The rest of a conversion once the picture is read (also for pictures another engine decoded, see
+    /// Wic/WicImageConverter): the frames kept for the target, the preset's options, the files.
+    /// </summary>
+    /// <param name="from">Format the frames were read from (animations and icons keep different frames).</param>
+    internal static IReadOnlyList<string> Write(MagickImageCollection images, string from, ConversionStep step,
+        IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        progress?.Report(0.3);
+
+        // A JPG has no transparent border to trim: re-encoding it would only cost a JPEG generation.
+        if (step.Preset.Image.TrimTransparent && !ImageEncoder.HoldsAlpha(step.To))
+            throw new ConversionRefusedException("error.no_transparency", step.To.ToUpperInvariant());
+
+        var animation = ImageEncoder.KeepsAnimation(from, step.To);
+        var frames = ImageEncoder.SelectFrames(images, from, step.To);
+        // Before the options: frames dropped for speed aren't resized for nothing.
+        if (animation && step.Preset.Image.ChangesSpeed)
+            frames = AnimationTiming.ChangeSpeed(frames, step.Preset.Image.PlaybackSpeed, step.To);
+        foreach (var frame in frames)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ImageEncoder.ApplyOptions(frame, step.Preset.Image, step.To);
+            // Animations aren't trimmed: each frame trimmed alone would shift. Trimming all frames to one box could be added.
+            if (step.Preset.Image.TrimTransparent && !(animation && frames.Count > 1))
+                ImageEncoder.TrimTransparentBorders(frame);
+        }
+        progress?.Report(0.7);
+
+        var written = ImageEncoder.Write(frames, step.To, step.Output, step.Preset.Image, step.InputPath, animation);
+        progress?.Report(1);
+        return written;
+    }
 }

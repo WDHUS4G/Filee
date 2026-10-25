@@ -1,17 +1,13 @@
 // Draws an Svg.Skia drawing with its text converted to glyph outlines, for PDF output. SkiaSharp's PDF backend is
 // built without a font subsetter and embeds every font file whole: one line of Korean text adds the 13 MB Malgun
 // Gothic font to the PDF. Outlines keep the text's exact shape at a few kilobytes (it is no longer selectable).
-// Text is shaped with HarfBuzz the way Svg.Skia does it (adapted from SkiaModel.TextShaping.cs, Svg.Skia, MIT).
+// Text is shaped with HarfBuzz (GlyphOutlines).
 
-using System.Runtime.InteropServices;
-using HarfBuzzSharp;
 using ShimSkiaSharp;
 using Svg.Skia;
-using Buffer = HarfBuzzSharp.Buffer;
 using SKCanvas = SkiaSharp.SKCanvas;
 using SKFont = SkiaSharp.SKFont;
 using SKPath = SkiaSharp.SKPath;
-using SKPoint = SkiaSharp.SKPoint;
 using SKTextAlign = SkiaSharp.SKTextAlign;
 using SKTypeface = SkiaSharp.SKTypeface;
 
@@ -20,10 +16,7 @@ namespace Filee.Engines.Vector;
 /// <summary>Plays back an Svg.Skia picture model, drawing text commands as paths.</summary>
 internal sealed class OutlinedTextPlayback(SkiaModel model) : IDisposable
 {
-    /// <summary>HarfBuzz works in integer units: positions are computed at this scale and divided back.</summary>
-    private const int HarfBuzzScale = 512;
-
-    private readonly Dictionary<string, Font?> _shapers = new(StringComparer.Ordinal);
+    private readonly GlyphOutlines _glyphs = new();
 
     /// <summary>Draws every command of <paramref name="picture"/> onto <paramref name="canvas"/>.</summary>
     public void Draw(ShimSkiaSharp.SKPicture picture, SKCanvas canvas)
@@ -90,7 +83,7 @@ internal sealed class OutlinedTextPlayback(SkiaModel model) : IDisposable
             return true;
         using var font = command.Font is { } shimFont ? model.ToSKFont(shimFont) : model.ToSKFont(command.Paint!);
         var align = model.ToSKTextAlign(command.TextAlign ?? command.Paint!.TextAlign);
-        return font?.Typeface is not null && AppendShaped(path, command.Text, font, command.X, command.Y, align);
+        return font?.Typeface is not null && _glyphs.AppendShaped(path, command.Text, font, command.X, command.Y, align);
     }
 
     private bool OutlineTextBlob(DrawTextBlobCanvasCommand command, SKPath path)
@@ -106,7 +99,7 @@ internal sealed class OutlinedTextPlayback(SkiaModel model) : IDisposable
         if (glyphs.Length != points.Length)
             return false;
         for (var i = 0; i < glyphs.Length; i++)
-            AppendGlyph(path, font, glyphs[i], command.X + points[i].X, command.Y + points[i].Y);
+            GlyphOutlines.AppendGlyph(path, font, glyphs[i], command.X + points[i].X, command.Y + points[i].Y);
         return true;
     }
 
@@ -121,7 +114,7 @@ internal sealed class OutlinedTextPlayback(SkiaModel model) : IDisposable
         foreach (var fragment in command.Fragments)
         {
             using var part = new SKPath();
-            if (!AppendShaped(part, fragment.Text, font, fragment.Point.X, fragment.Point.Y, align))
+            if (!_glyphs.AppendShaped(part, fragment.Text, font, fragment.Point.X, fragment.Point.Y, align))
                 continue;
             // Per-character rotation (SVG "rotate") and horizontal scaling (textLength), as Svg.Skia applies them.
             var transform = SkiaSharp.SKMatrix.Identity;
@@ -135,100 +128,5 @@ internal sealed class OutlinedTextPlayback(SkiaModel model) : IDisposable
         return true;
     }
 
-    /// <summary>Shapes <paramref name="text"/> and appends its glyph outlines, aligned at (<paramref name="x"/>, <paramref name="y"/>).</summary>
-    private bool AppendShaped(SKPath path, string text, SKFont font, float x, float y, SKTextAlign align)
-    {
-        if (string.IsNullOrEmpty(text))
-            return true;
-        var shaper = ShaperFor(font.Typeface);
-        if (shaper is null)
-            return false;
-
-        using var buffer = new Buffer();
-        buffer.ClusterLevel = ClusterLevel.Characters;
-        buffer.AddUtf16(text);
-        buffer.GuessSegmentProperties();
-        shaper.Shape(buffer);
-
-        var infos = buffer.GlyphInfos;
-        var positions = buffer.GlyphPositions;
-        var scaleY = font.Size / HarfBuzzScale;
-        var scaleX = scaleY * font.ScaleX;
-        var width = 0f;
-        foreach (var position in positions)
-            width += position.XAdvance * scaleX;
-        var penX = x - align switch
-        {
-            SKTextAlign.Center => width / 2,
-            SKTextAlign.Right => width,
-            _ => 0f,
-        };
-        var penY = y;
-        for (var i = 0; i < infos.Length; i++)
-        {
-            AppendGlyph(path, font, (ushort)infos[i].Codepoint, penX + positions[i].XOffset * scaleX, penY - positions[i].YOffset * scaleY);
-            penX += positions[i].XAdvance * scaleX;
-            penY -= positions[i].YAdvance * scaleY;
-        }
-        return true;
-    }
-
-    private static void AppendGlyph(SKPath path, SKFont font, ushort glyph, float x, float y)
-    {
-        using var outline = font.GetGlyphPath(glyph);
-        if (outline is { IsEmpty: false })
-            path.AddPath(outline, x, y);
-    }
-
-    /// <summary>A HarfBuzz font for the typeface (cached), or null when its font data can't be read.</summary>
-    private Font? ShaperFor(SKTypeface typeface)
-    {
-        var key = $"{typeface.FamilyName}|{typeface.FontWeight}|{typeface.FontWidth}|{typeface.FontSlant}";
-        if (_shapers.TryGetValue(key, out var cached))
-            return cached;
-
-        Font? font = null;
-        var asset = typeface.OpenStream(out var index);
-        if (asset is not null)
-        {
-            using var blob = ToBlob(asset);
-            using var face = new Face(blob, index) { Index = index, UnitsPerEm = typeface.UnitsPerEm };
-            font = new Font(face);
-            font.SetScale(HarfBuzzScale, HarfBuzzScale);
-            font.SetFunctionsOpenType();
-        }
-        _shapers[key] = font;
-        return font;
-    }
-
-    /// <summary>Wraps Skia's font data for HarfBuzz without copying when Skia has it in memory.</summary>
-    private static Blob ToBlob(SkiaSharp.SKStreamAsset asset)
-    {
-        var size = asset.Length;
-        var memory = asset.GetMemoryBase();
-        Blob blob;
-        if (memory != IntPtr.Zero)
-        {
-            blob = new Blob(memory, size, MemoryMode.ReadOnly, asset.Dispose);
-        }
-        else
-        {
-            var copy = Marshal.AllocCoTaskMem(size);
-            asset.Read(copy, size);
-            blob = new Blob(copy, size, MemoryMode.ReadOnly, () =>
-            {
-                Marshal.FreeCoTaskMem(copy);
-                asset.Dispose();
-            });
-        }
-        blob.MakeImmutable();
-        return blob;
-    }
-
-    public void Dispose()
-    {
-        foreach (var font in _shapers.Values)
-            font?.Dispose();
-        _shapers.Clear();
-    }
+    public void Dispose() => _glyphs.Dispose();
 }

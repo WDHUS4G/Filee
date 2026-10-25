@@ -163,7 +163,8 @@ internal sealed partial class HwpxWriter
             var fontRef = EnsureChild(node, "fontRef");
             foreach (var language in Languages)
             {
-                var eastAsian = language is "HANGUL" or "HANJA" or "JAPANESE";
+                // The symbol slot holds the CJK punctuation (、。「」《》), which Word draws in the East Asian font.
+                var eastAsian = language is "HANGUL" or "HANJA" or "JAPANESE" or "SYMBOL";
                 var face = eastAsian ? format.EastAsianFont ?? format.Font : format.Font ?? format.EastAsianFont;
                 if (face is not null)
                     fontRef.SetAttributeValue(language.ToLowerInvariant(), FontId(language, face));

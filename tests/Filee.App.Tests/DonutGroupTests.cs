@@ -395,9 +395,19 @@ public class DonutGroupTests
             vm.ResetForDrag(); // dragging: the files (and so the donut) aren't known yet
             Assert.True(vm.ReserveSubRing);
 
-            vm.Load([@"C:\docs\a.pdf"], clickMode: true); // the PDF donut has no group
+            vm.Load([@"C:\downloads\a.zip"], clickMode: true); // the archive donut has no group
             vm.FitToThisDonut();
             Assert.False(vm.ReserveSubRing);
+
+            vm.Load([@"C:\docs\a.pdf"], clickMode: true); // Edit is a group on the PDF donut's back
+            vm.FitToThisDonut();
+            Assert.True(vm.ReserveSubRing);
+            Assert.True(vm.ToggleFace());
+            Assert.True(vm.Items[0].IsGroup);
+            Assert.Equal(Preset.MaxSubPresets, vm.Items[0].Children!.Count);
+            Assert.Equal("tool-pdf-crop", vm.PresetShownAt(0, 0)!.Id);
+            Assert.Equal("tool-pdf-add", vm.PresetShownAt(0, 5)!.Id);
+
             vm.Load([@"C:\photos\a.jpg"], clickMode: true); // the image donut has
             vm.FitToThisDonut();
             Assert.True(vm.ReserveSubRing);
@@ -425,6 +435,41 @@ public class DonutGroupTests
         mergeTurned.TargetFormat = "pdf";
         mergeTurned.Pdf.MergeIntoSingle = true;
         Assert.Equal("Rotate and flip work on images only", availability.Check(mergeTurned, [Filee.Core.Formats.FormatRegistry.Get("pdf")]));
+    }
+
+    [AvaloniaFact]
+    public void Tool_presets_are_available_only_for_writable_single_frame_raster_formats()
+    {
+        TestServices.EnsureInitialized("en");
+        var availability = AppHost.Get<PresetAvailability>();
+        var crop = BuiltInData.CreatePresets().Single(p => p.Id == "tool-crop");
+
+        Assert.Null(availability.Check(crop, [Filee.Core.Formats.FormatRegistry.Get("png")]));
+        Assert.Null(availability.Check(crop, [Filee.Core.Formats.FormatRegistry.Get("jpg")]));
+        Assert.Null(availability.Check(crop, [Filee.Core.Formats.FormatRegistry.Get("webp")]));
+
+        Assert.Equal("This file type isn't supported", availability.Check(crop, [Filee.Core.Formats.FormatRegistry.Get("pdf")]));
+        Assert.Equal("This file type isn't supported", availability.Check(crop, [Filee.Core.Formats.FormatRegistry.Get("svg")]));
+        Assert.Equal("This file type isn't supported", availability.Check(crop, [Filee.Core.Formats.FormatRegistry.Get("heic")]));
+
+        Assert.Equal("This file type isn't supported", availability.Check(crop, [Filee.Core.Formats.FormatRegistry.Get("png"), Filee.Core.Formats.FormatRegistry.Get("pdf")]));
+        Assert.Equal("This file type isn't supported", availability.Check(crop, []));
+    }
+
+    [AvaloniaFact]
+    public void Pdf_tools_are_available_only_when_every_file_is_a_PDF()
+    {
+        TestServices.EnsureInitialized("en");
+        var availability = AppHost.Get<PresetAvailability>();
+        var crop = BuiltInData.CreatePresets().Single(p => p.Id == "tool-pdf-crop");
+        var pdf = Filee.Core.Formats.FormatRegistry.Get("pdf");
+        var png = Filee.Core.Formats.FormatRegistry.Get("png");
+
+        Assert.Null(availability.Check(crop, [pdf]));
+        Assert.Equal(new PresetJudgement(PresetUse.Usable, null), availability.ForPalette([pdf]).Judge(crop));
+        Assert.Equal("This file type isn't supported", availability.Check(crop, [png]));
+        Assert.Equal("This file type isn't supported", availability.Check(crop, [pdf, png]));
+        Assert.Equal("This file type isn't supported", availability.Check(crop, []));
     }
 
     [AvaloniaFact]

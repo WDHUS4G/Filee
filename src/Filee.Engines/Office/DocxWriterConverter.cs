@@ -32,7 +32,8 @@ public sealed class DocxWriterConverter : IConverter
     public async Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken)
     {
         progress?.Report(0.1);
-        var document = await DocumentReaders.ReadAsync(step.InputPath, step.From, step.WorkDirectory, cancellationToken);
+        var document = await DocumentReaders.ReadAsync(step.InputPath, step.From, step.WorkDirectory, cancellationToken,
+            ocrLayer: step.Preset.Pdf.Ocr);
         progress?.Report(0.6);
 
         var output = step.Output.Allocate("docx");

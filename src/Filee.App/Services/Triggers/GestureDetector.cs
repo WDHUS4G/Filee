@@ -4,7 +4,9 @@
 // Drag gesture:  button down with the exact modifiers  →  (armed)  →  moved past threshold  →  DragStarted
 //                →  button up  →  DragEnded
 // Hold gesture:  button down with modifiers  →  (armed)  →  HoldElapsed without moving  →  HoldTriggered
+// Drag and Hold on the same button and modifiers arm together: moving past the threshold drags, holding still holds.
 // Key chord:     key down with the exact modifiers  →  KeyChordTriggered at the last known cursor position
+//                (the scope filter judges a key chord by the window in front, not by the cursor)
 
 using Filee.Core.Settings;
 
@@ -17,10 +19,11 @@ public sealed class GestureDetector
     private IReadOnlyList<TriggerGesture> _gestures = [];
     private Armed? _armed;
     private bool _dragActive;
-    private bool _lateRejected; // scope check failed for this drag; don't re-check on every move
+    private bool _lateRejected; // no late-modifier drag for this press: its scope failed, or a hold already fired
     private int _lastX, _lastY;
 
-    private sealed record Armed(TriggerGesture Gesture, TriggerMouseButton Button, int X, int Y, long Token);
+    /// <summary>A press that may still become a drag, a hold, or both until one of them happens.</summary>
+    private sealed record Armed(TriggerGesture? Drag, TriggerGesture? Hold, int X, int Y, long Token);
 
     /// <summary>
     /// Decides whether a gesture may start at a screen point (scope / excluded apps / own windows).
@@ -64,22 +67,24 @@ public sealed class GestureDetector
             if (Paused)
                 return;
 
-            var gesture = _gestures.FirstOrDefault(g =>
-                g.Kind is TriggerKind.Drag or TriggerKind.Hold &&
-                g.Button == button &&
-                g.Modifiers == modifiers);
-            if (gesture is null || !ScopeFilter(gesture, x, y))
+            // A drag and a hold may share the button and modifiers (#450): both are armed, and what the pointer does
+            // next decides between them.
+            var drag = FirstInScope(TriggerKind.Drag, button, modifiers, x, y);
+            holdGesture = FirstInScope(TriggerKind.Hold, button, modifiers, x, y);
+            if (drag is null && holdGesture is null)
                 return;
 
             token = Environment.TickCount64 ^ (x * 7919L) ^ y;
-            _armed = new Armed(gesture, button, x, y, token);
-            if (gesture.Kind == TriggerKind.Hold)
-                holdGesture = gesture;
+            _armed = new Armed(drag, holdGesture, x, y, token);
         }
 
         if (holdGesture is not null)
             HoldTimerRequested?.Invoke(token, holdGesture.HoldMilliseconds);
     }
+
+    /// <summary>The first gesture of a kind on this button and modifiers that may start here. Caller holds the lock.</summary>
+    private TriggerGesture? FirstInScope(TriggerKind kind, TriggerMouseButton button, ModifierKeys modifiers, int x, int y) =>
+        _gestures.FirstOrDefault(g => g.Kind == kind && g.Button == button && g.Modifiers == modifiers && ScopeFilter(g, x, y));
 
     /// <summary>Pointer moved (physical pixels). <paramref name="heldButton"/> is the button currently held, or None.</summary>
     public void MouseMove(int x, int y, ModifierKeys modifiers, TriggerMouseButton heldButton = TriggerMouseButton.None)
@@ -99,18 +104,26 @@ public sealed class GestureDetector
     }
 
     /// <summary>
-    /// An armed gesture moved: a drag gesture fires once the threshold is passed; a hold gesture is cancelled.
-    /// Caller holds the lock.
+    /// An armed press moved: past its threshold a hold is cancelled, and a drag fires. Caller holds the lock.
     /// </summary>
     private TriggerGesture? DetectDragPastThreshold(int x, int y)
     {
         var armed = _armed!;
-        var threshold = armed.Gesture.DragThreshold > 0 ? armed.Gesture.DragThreshold : SystemDragThreshold;
-        if (Math.Abs(x - armed.X) <= threshold && Math.Abs(y - armed.Y) <= threshold)
-            return null;
+        if (armed.Hold is { } hold && Moved(hold, armed, x, y))
+            armed = armed with { Hold = null };
+        if (armed.Drag is { } drag && Moved(drag, armed, x, y))
+        {
+            _armed = null;
+            return drag;
+        }
+        _armed = armed.Drag is null && armed.Hold is null ? null : armed;
+        return null;
+    }
 
-        _armed = null;
-        return armed.Gesture.Kind == TriggerKind.Drag ? armed.Gesture : null;
+    private bool Moved(TriggerGesture gesture, Armed armed, int x, int y)
+    {
+        var threshold = gesture.DragThreshold > 0 ? gesture.DragThreshold : SystemDragThreshold;
+        return Math.Abs(x - armed.X) > threshold || Math.Abs(y - armed.Y) > threshold;
     }
 
     /// <summary>
@@ -155,11 +168,12 @@ public sealed class GestureDetector
         int x = 0, y = 0;
         lock (_lock)
         {
-            if (_armed is { } armed && armed.Token == token && armed.Gesture.Kind == TriggerKind.Hold)
+            if (_armed is { Hold: { } hold } armed && armed.Token == token)
             {
-                fire = armed.Gesture;
+                fire = hold;
                 (x, y) = (armed.X, armed.Y);
                 _armed = null;
+                _lateRejected = true; // moving on after the hold doesn't start the drag that shares its modifiers
             }
         }
         if (fire is not null)
@@ -175,13 +189,13 @@ public sealed class GestureDetector
         {
             if (Paused)
                 return;
+            (x, y) = (_lastX, _lastY);
+            // Two shortcuts on one key (one per scope, say): the first whose scope fits fires.
             fire = _gestures.FirstOrDefault(g =>
                 g.Kind == TriggerKind.KeyChord &&
                 string.Equals(g.Key, key, StringComparison.OrdinalIgnoreCase) &&
-                g.Modifiers == modifiers);
-            (x, y) = (_lastX, _lastY);
-            if (fire is not null && !ScopeFilter(fire, x, y))
-                fire = null;
+                g.Modifiers == modifiers &&
+                ScopeFilter(g, x, y));
         }
         if (fire is not null)
             KeyChordTriggered?.Invoke(fire, x, y);

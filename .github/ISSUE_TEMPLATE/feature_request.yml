@@ -1,0 +1,28 @@
+name: Feature request
+description: A preset option, engine or idea
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > [!NOTE]
+        > A file type Filee can't open yet? Please use the **Format request** form instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like Filee to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why / when would you use it?
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: ideas
+    attributes:
+      label: Ideas for how it could work
+      description: Optional. Engine or library suggestions are welcome.

@@ -36,37 +36,44 @@ public sealed class SpreadsheetConverter : IConverter
             cancellationToken.ThrowIfCancellationRequested();
             progress?.Report(0.6);
 
-            var outputs = new List<string>();
-            switch (step.To)
-            {
-                case "xlsx" or "ods":
-                    if (step.Output.Allocate(step.To) is { } path)
-                    {
-                        if (step.To == "xlsx")
-                            XlsxWriter.Write(book, path);
-                        else
-                            OdsWriter.Write(book, path);
-                        outputs.Add(path);
-                    }
-                    break;
-                default:
-                    // CSV and TSV hold one sheet: a workbook with several sheets becomes one file per sheet.
-                    var sheets = book.Sheets.Where(s => s.UsedRange() is not null).ToList();
-                    if (sheets.Count == 0 && book.Sheets.Count > 0)
-                        sheets = [book.Sheets[0]];
-                    foreach (var sheet in sheets)
-                    {
-                        var file = step.Output.Allocate(step.To, sheets.Count > 1 ? "_" + SafeName(sheet.Name) : null);
-                        if (file is null)
-                            continue;
-                        CsvFormat.Write(sheet, file, step.To == "tsv" ? CsvFormat.Tab : ',');
-                        outputs.Add(file);
-                    }
-                    break;
-            }
+            var outputs = Write(book, step);
             progress?.Report(1);
             return outputs;
         }, cancellationToken);
+
+    /// <summary>Writes a workbook as the step's XLSX, ODS, CSV or TSV (also PdfTablesConverter's output).</summary>
+    internal static List<string> Write(Workbook book, ConversionStep step)
+    {
+        var outputs = new List<string>();
+        switch (step.To)
+        {
+            case "xlsx" or "ods":
+                if (step.Output.Allocate(step.To) is { } path)
+                {
+                    if (step.To == "xlsx")
+                        XlsxWriter.Write(book, path);
+                    else
+                        OdsWriter.Write(book, path);
+                    outputs.Add(path);
+                }
+                break;
+            default:
+                // CSV and TSV hold one sheet: a workbook with several sheets becomes one file per sheet.
+                var sheets = book.Sheets.Where(s => s.UsedRange() is not null).ToList();
+                if (sheets.Count == 0 && book.Sheets.Count > 0)
+                    sheets = [book.Sheets[0]];
+                foreach (var sheet in sheets)
+                {
+                    var file = step.Output.Allocate(step.To, sheets.Count > 1 ? "_" + SafeName(sheet.Name) : null);
+                    if (file is null)
+                        continue;
+                    CsvFormat.Write(sheet, file, step.To == "tsv" ? CsvFormat.Tab : ',');
+                    outputs.Add(file);
+                }
+                break;
+        }
+        return outputs;
+    }
 
     /// <summary>Reads a spreadsheet of a format id this engine accepts.</summary>
     internal static Workbook Read(string path, string format) => format switch

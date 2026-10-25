@@ -85,6 +85,11 @@ public sealed partial class TriggerGestureViewModel : ObservableObject
     public string ThresholdText => DragThreshold == 0 ? SystemLabel : $"{DragThreshold}px";
     public string Summary => GestureText.Describe(_gesture);
 
+    // Runs before OnPropertyChanged below, which reads every choice.
+    partial void OnKindChanged(Choice<TriggerKind>? oldValue, Choice<TriggerKind> newValue) => Choices.Restore(oldValue, newValue, v => Kind = v);
+    partial void OnButtonChanged(Choice<TriggerMouseButton>? oldValue, Choice<TriggerMouseButton> newValue) => Choices.Restore(oldValue, newValue, v => Button = v);
+    partial void OnScopeChanged(Choice<TriggerScope>? oldValue, Choice<TriggerScope> newValue) => Choices.Restore(oldValue, newValue, v => Scope = v);
+
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
@@ -135,6 +140,96 @@ public sealed partial class TriggerGestureViewModel : ObservableObject
     }
 }
 
+/// <summary>
+/// How the open donut flips to its other face: a key (Tab unless the user records another; cleared, none) and the
+/// mouse wheel. Both work while dragging and in click mode.
+/// </summary>
+public sealed partial class FlipOptionsViewModel : ObservableObject
+{
+    private readonly UserDataStore _store;
+    private readonly ILocalizer _loc;
+    private readonly Action _save;
+    private readonly bool _loading;
+
+    public FlipOptionsViewModel(UserDataStore store, ILocalizer loc, Action save)
+    {
+        _store = store;
+        _loc = loc;
+        _save = save;
+        _loading = true;
+        FlipWithWheel = store.Settings.Donut.FlipWithWheel;
+        _loading = false;
+    }
+
+    private DonutSettings Donut => _store.Settings.Donut;
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(KeyText))] private bool _isRecording;
+
+    /// <summary>Why the last key pressed while recording wasn't taken, or null.</summary>
+    [ObservableProperty] private string? _error;
+
+    [ObservableProperty] private bool _flipWithWheel;
+
+    /// <summary>The key that flips now ("Tab", "F2"), "Press a key…" while recording, or "—" for none.</summary>
+    public string KeyText => IsRecording ? _loc["triggers.recording_key"]
+        : Donut.EffectiveFlipKey(_store.Settings.Triggers) is { } key ? KeyNames.Display(key) : "—";
+
+    partial void OnIsRecordingChanged(bool value)
+    {
+        if (value)
+            Error = null;
+    }
+
+    partial void OnFlipWithWheelChanged(bool value)
+    {
+        if (_loading)
+            return;
+        Donut.FlipWithWheel = value;
+        _save();
+    }
+
+    [RelayCommand]
+    private void ResetKey() => SetKey(DonutSettings.DefaultFlipKey);
+
+    [RelayCommand]
+    private void ClearKey() => SetKey("");
+
+    private void SetKey(string key)
+    {
+        IsRecording = false;
+        Error = null;
+        Donut.FlipKey = key;
+        _save();
+        OnPropertyChanged(nameof(KeyText));
+    }
+
+    /// <summary>
+    /// Called by the view while recording: the key pressed becomes the flip key (its modifiers don't count: a drag holds
+    /// one anyway). Modifier keys alone wait for a real key; Esc, Enter, Space, the arrows, Backspace and the key of a
+    /// keyboard shortcut are refused with the reason. Returns true when the key was handled.
+    /// </summary>
+    public bool Record(Key key)
+    {
+        if (!IsRecording || key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift
+                or Key.RightShift or Key.LWin or Key.RWin)
+            return false;
+        if (KeyNames.ToHookName(key) is not { } name)
+        {
+            Error = _loc["triggers.flip_key_unknown"];
+            IsRecording = false;
+            return true;
+        }
+        if (!DonutSettings.IsFlipKeyAllowed(name, _store.Settings.Triggers))
+        {
+            Error = _loc.Format("triggers.flip_key_taken", KeyNames.Display(name));
+            IsRecording = false;
+            return true;
+        }
+        SetKey(name);
+        return true;
+    }
+}
+
 public sealed partial class TriggersPageViewModel : ObservableObject, IDisposable
 {
     private readonly UserDataStore _store;
@@ -158,7 +253,11 @@ public sealed partial class TriggersPageViewModel : ObservableObject, IDisposabl
         foreach (var gesture in store.Settings.Triggers)
             Gestures.Add(new TriggerGestureViewModel(gesture, loc, Save));
         ExcludedApps = new ExcludedAppsViewModel(store.Settings.ExcludedProcesses, platform, Save);
+        Flip = new FlipOptionsViewModel(store, loc, Save);
     }
+
+    /// <summary>The key and the wheel that flip the open donut.</summary>
+    public FlipOptionsViewModel Flip { get; }
 
     public ObservableCollection<TriggerGestureViewModel> Gestures { get; } = [];
 
@@ -168,12 +267,31 @@ public sealed partial class TriggersPageViewModel : ObservableObject, IDisposabl
     public string? PlatformNotice => _platform switch
     {
         MacOSPlatformServices => _loc["triggers.macos_permissions"],
-        LinuxPlatformServices when OperatingSystem.IsLinux() && LinuxPlatformServices.IsWaylandSession => _loc["triggers.linux_wayland"],
+        // FILEE_WAYLAND_GESTURES=0 turns the GNOME bridge off; the plain Wayland notice applies then.
+        LinuxPlatformServices when OperatingSystem.IsLinux() && LinuxPlatformServices.UsesGnomePointerBridge =>
+            _loc["triggers.linux_gnome_wayland"],
+        LinuxPlatformServices linux when OperatingSystem.IsLinux() && LinuxPlatformServices.IsWaylandSession =>
+            _loc[linux.SupportsGlobalPointerGestures ? "triggers.linux_wayland_experimental" : "triggers.linux_wayland"],
         LinuxPlatformServices => _loc["triggers.linux_x11"],
         _ => null,
     };
-    public string? HookStatus => _triggers?.Error is { } error ? _loc.Format("triggers.hook_failed", error)
+    public string? HookStatus => _triggers?.Error is { } error ? HookFailure(_loc, error, _triggers.LinuxBackendMissing)
+        : _triggers?.GnomeExtensionStatus is { } gnome ? _loc[GnomeStatusKey(gnome)]
         : _triggers is null ? null : _loc[_triggers.IsRunning ? "triggers.hook_running" : "triggers.hook_stopped"];
+
+    internal static string GnomeStatusKey(GnomeBridgeStatus status) => status switch
+    {
+        GnomeBridgeStatus.Connected => "triggers.hook_running",
+        GnomeBridgeStatus.VersionMismatch => "triggers.gnome_version_mismatch",
+        _ => "triggers.gnome_waiting",
+    };
+
+    /// <summary>
+    /// A Linux back end that doesn't load is explained (X11 session, X libraries) instead of showing libuiohook's
+    /// result code; the code is in the log.
+    /// </summary>
+    internal static string HookFailure(ILocalizer loc, string error, bool linuxBackendMissing) =>
+        linuxBackendMissing ? loc["triggers.hook_linux_backend"] : loc.Format("triggers.hook_failed", error);
 
     private void OnTriggerStatusChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(HookStatus));
     private void OnTriggerSettingsChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(IntegrationError));
@@ -230,45 +348,4 @@ public sealed partial class TriggersPageViewModel : ObservableObject, IDisposabl
     }
 
     private void Save() => _store.SaveSettings();
-}
-
-/// <summary>Maps Avalonia keys to SharpHook key names (KeyCode without "Vc").</summary>
-public static class KeyNames
-{
-    public static string? ToHookName(Key key) => key switch
-    {
-        >= Key.A and <= Key.Z => key.ToString(),
-        >= Key.D0 and <= Key.D9 => ((int)(key - Key.D0)).ToString(),
-        >= Key.NumPad0 and <= Key.NumPad9 => "NumPad" + (int)(key - Key.NumPad0),
-        >= Key.F1 and <= Key.F24 => key.ToString(),
-        Key.Space => "Space",
-        Key.Enter => "Enter",
-        Key.Tab => "Tab",
-        Key.Escape => "Escape",
-        Key.Back => "Backspace",
-        Key.Insert => "Insert",
-        Key.Delete => "Delete",
-        Key.Home => "Home",
-        Key.End => "End",
-        Key.PageUp => "PageUp",
-        Key.PageDown => "PageDown",
-        Key.Left => "Left",
-        Key.Right => "Right",
-        Key.Up => "Up",
-        Key.Down => "Down",
-        Key.OemTilde => "BackQuote",
-        Key.OemMinus => "Minus",
-        Key.OemPlus => "Equals",
-        Key.OemOpenBrackets => "OpenBracket",
-        Key.OemCloseBrackets => "CloseBracket",
-        Key.OemPipe => "Backslash",
-        Key.OemSemicolon => "Semicolon",
-        Key.OemQuotes => "Quote",
-        Key.OemComma => "Comma",
-        Key.OemPeriod => "Period",
-        Key.OemQuestion => "Slash",
-        Key.PrintScreen => "PrintScreen",
-        Key.Pause => "Pause",
-        _ => null,
-    };
 }

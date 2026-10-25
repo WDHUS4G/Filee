@@ -48,7 +48,7 @@ public sealed partial class GroupEditorViewModel : ObservableObject
     /// <summary>The presets the group fans out, in order.</summary>
     public ObservableCollection<GroupMember> Members { get; } = [];
 
-    /// <summary>Conversions that can still be added (not groups, not already in it).</summary>
+    /// <summary>Actions that can still be added (not groups, not already in it).</summary>
     public ObservableCollection<Choice<string>> Available { get; } = [];
 
     [ObservableProperty]
@@ -121,12 +121,15 @@ public sealed partial class GroupEditorViewModel : ObservableObject
         return true;
     }
 
-    /// <summary>Removes the group from the store and from every donut (its presets stay).</summary>
+    /// <summary>Removes the group from the store and from every donut, front and back (its presets stay).</summary>
     public void Delete()
     {
         _store.Presets.Remove(_group);
         foreach (var profile in _store.Profiles)
+        {
             profile.PresetIds.Remove(_group.Id);
+            profile.BackPresetIds?.Remove(_group.Id);
+        }
         Deleted = true;
     }
 

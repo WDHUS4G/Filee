@@ -6,6 +6,7 @@ using System.Text;
 using System.Xml.Linq;
 using Filee.Core.Conversion;
 using Filee.Core.Presets;
+using Filee.Engines.Hwp.Hwpx;
 using Filee.Engines.Office.Sheets;
 using ImageMagick;
 using static Filee.Engines.Tests.HwpxAssert;
@@ -166,6 +167,42 @@ public class OfficeTests(EngineFixture fx) : IClassFixture<EngineFixture>
         Assert.DoesNotContain("보이면 안 됨", string.Concat(new[] { 0, 1, 2 }.Select(i => Xml(hwpx, $"Contents/section{i}.xml").Value)));
 
         RenderWithRhwp(fx, hwpx, "xlsx-sales");
+    }
+
+    [Fact]
+    public void Print_titles_name_the_rows_they_repeat()
+    {
+        Assert.Equal((2, 3), XlsxReader.PrintTitleRows("'공사 내역서'!$3:$4"));
+        Assert.Equal((0, 1), XlsxReader.PrintTitleRows("Sheet1!$A:$B,Sheet1!$1:$2"));
+        Assert.Null(XlsxReader.PrintTitleRows("Sheet1!$A:$B")); // columns only
+    }
+
+    [Fact]
+    public async Task Rows_to_repeat_at_the_top_repeat_on_every_page_of_a_pdf_bound_table()
+    {
+        // Issue #407: a bill of quantities with a title, then two heading rows set as "Rows to repeat at top" and a
+        // page break. The title comes once; the headings start every page's table.
+        var xlsx = new XlsxBuilder();
+        xlsx.Sheet("숨김", Row(1, xlsx.Text("A1", "x")), hidden: true); // hidden sheets still count in localSheetId
+        var rows = Row(1, xlsx.Text("A1", "공사 내역서", Header)) + Row(2, xlsx.Text("A2", "현장: 서울")) +
+                   Row(3, xlsx.Text("A3", "품명", Header), xlsx.Text("B3", "금액", Header)) +
+                   Row(4, xlsx.Text("A4", "규격", Header), xlsx.Text("B4", "원", Header)) +
+                   string.Concat(Enumerable.Range(5, 40).Select(r => Row(r, xlsx.Text($"A{r}", $"자재 {r}"), Number($"B{r}", r * 1000))));
+        xlsx.Sheet("내역", rows, after: "<rowBreaks count=\"1\" manualBreakCount=\"1\"><brk id=\"24\" max=\"16383\" man=\"1\"/></rowBreaks>");
+        xlsx.DefinedNames = "<definedNames><definedName name=\"_xlnm.Print_Titles\" localSheetId=\"1\">내역!$3:$4</definedName></definedNames>";
+        var path = xlsx.Save(Path.Combine(fx.NewFolder(), "내역서.xlsx"));
+
+        Assert.Equal((2, 3), Assert.Single(XlsxReader.Read(path).Sheets).TitleRows);
+        var tables = SheetDocument.Build(XlsxReader.Read(path)).Sections.Single().Blocks.OfType<HTable>().ToList();
+
+        Assert.Equal(3, tables.Count); // the title, then one table per printed page
+        Assert.Equal(2, tables[0].Rows.Count);
+        Assert.DoesNotContain(tables[0].Rows, r => r.Header);
+        foreach (var page in tables.Skip(1))
+            Assert.Equal([true, true, false], page.Rows.Take(3).Select(r => r.Header));
+        Assert.Equal(2 + 20, tables[1].Rows.Count); // rows 5-24, then the break
+        Assert.Equal(2 + 20, tables[2].Rows.Count); // rows 25-44
+        Assert.True(tables[2].PageBreakBefore);
     }
 
     // ───────────────────────── Presentations ─────────────────────────

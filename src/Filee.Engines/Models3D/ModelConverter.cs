@@ -1,5 +1,6 @@
 // 3D models in managed code only (SharpGLTF for glTF, Filee's own readers and writers for the rest): GLB, glTF, STL,
-// OBJ, 3MF and PLY into each other through one in-memory model (Model3D), and an isometric preview picture.
+// OBJ, 3MF and PLY into each other through one in-memory model (Model3D), FBX (read only) into any of them, and an
+// isometric preview picture.
 // See docs/ENGINES.md, "3D models", for units, axes and what each format keeps.
 
 using Filee.Core.Conversion;
@@ -12,11 +13,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Filee.Engines.Models3D;
 
-/// <summary>Converts 3D models between GLB, glTF, STL, OBJ, 3MF and PLY, and renders them to pictures.</summary>
+/// <summary>Converts 3D models between GLB, glTF, STL, OBJ, 3MF and PLY, reads FBX, and renders them to pictures.</summary>
 public sealed class ModelConverter(ILogger? logger = null) : IConverter, IImageTransformer
 {
     /// <summary>The 3D formats, each readable and writable.</summary>
     public static readonly string[] Formats = ["glb", "gltf", "stl", "obj", "3mf", "ply"];
+
+    /// <summary>Every 3D format that can be read: <see cref="Formats"/> and FBX.</summary>
+    public static readonly string[] InputFormats = [.. Formats, "fbx"];
 
     /// <summary>Long edge of the preview picture before the preset's resize.</summary>
     internal const int PreviewSize = 1024;
@@ -34,11 +38,11 @@ public sealed class ModelConverter(ILogger? logger = null) : IConverter, IImageT
 
     public IReadOnlyList<ConversionEdge> Edges { get; } =
     [
-        .. from source in Formats from target in Formats where source != target select new ConversionEdge(source, target),
-        .. from source in Formats from target in ImageEncoder.Writable select ImageEncoder.Edge(source, target),
+        .. from source in InputFormats from target in Formats where source != target select new ConversionEdge(source, target),
+        .. from source in InputFormats from target in ImageEncoder.Writable select ImageEncoder.Edge(source, target),
     ];
 
-    public EngineStatus GetStatus() => EngineStatus.Available("GLB, glTF, STL, OBJ, 3MF, PLY",
+    public EngineStatus GetStatus() => EngineStatus.Available("GLB, glTF, STL, OBJ, 3MF, PLY ↔ each other; FBX → each of them",
         $"{EngineVersions.BuiltIn} · {EngineVersions.Library("SharpGLTF", typeof(SharpGLTF.Schema2.ModelRoot))}");
 
     public Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken) =>
@@ -75,6 +79,7 @@ public sealed class ModelConverter(ILogger? logger = null) : IConverter, IImageT
             "ply" => PlyFormat.Read(path, progress, cancellationToken),
             "3mf" => ThreeMfFormat.Read(path, progress, cancellationToken),
             "glb" or "gltf" => GltfFormat.Read(path, progress, cancellationToken),
+            "fbx" => FbxFormat.Read(path, progress, cancellationToken),
             _ => throw new NotSupportedException($"Unknown 3D format '{format}'."),
         };
         model.Validate();

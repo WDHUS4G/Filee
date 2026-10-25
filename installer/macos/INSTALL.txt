@@ -1,15 +1,23 @@
-This package requires macOS 14 or later and contains a separate build for
+This package requires macOS 13 or later and contains a separate build for
 Apple Silicon or Intel Macs. The .NET runtime is included.
 Run ./install.sh to copy Filee.app to ~/Applications and add ~/.local/bin/filee.
+From the .dmg, drag Filee.app onto Applications instead (no filee command then).
 You can also move Filee.app into Applications manually. Keep its location stable
 so Accessibility and Finder Automation permissions continue to identify it.
 
 Test packages are ad-hoc signed and are not notarized. For a downloaded test
-build, use System Settings > Privacy & Security > Open Anyway when macOS blocks
-the first launch. Only open a build whose source and checksum you trust.
+build from the .dmg or moved by hand, use System Settings > Privacy & Security >
+Open Anyway when macOS blocks the first launch (install.sh clears the download
+flag of the copy it installs). Only open a build whose source and checksum you
+trust.
 
 Allow Filee in System Settings > Privacy & Security > Accessibility for global
-gestures. Allow Finder under Automation when using a selection shortcut.
+gestures. Filee asks once; until it is allowed, its Home page says so.
+After an update or a reinstall, from the .dmg or with install.sh, macOS may
+still list Filee switched on while gestures wait for the permission: it belongs
+to the earlier copy, which was signed differently. Select Filee there, remove it
+with the - button, then add Filee.app again with + and switch it on.
+Allow Finder under Automation when using a selection shortcut.
 Enable the Finder Quick Action in Filee settings. Services can also be managed
 under System Settings > Keyboard > Keyboard Shortcuts > Services.
 

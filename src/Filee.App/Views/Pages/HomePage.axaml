@@ -39,8 +39,24 @@
       </DockPanel>
     </Border>
 
-    <!-- Drop zone: files dropped here open the donut toolbar at the cursor. -->
+    <!-- Windows: Filee runs as administrator while Explorer doesn't. Explorer can't drop files here, use the menu or
+         have its selection read until Filee runs with normal rights again. -->
+    <Border IsVisible="{Binding IsElevated}" Background="{DynamicResource AccentFaintBrush}"
+            BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1" CornerRadius="{DynamicResource SoftRadius}" Padding="14,10">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0" Classes="accent"
+                Content="{DynamicResource home.elevated_restart}" Command="{Binding RestartWithoutAdministratorRightsCommand}" />
+        <StackPanel Spacing="6" VerticalAlignment="Center">
+          <TextBlock TextWrapping="Wrap" Text="{DynamicResource home.elevated}" />
+          <TextBlock Classes="caption danger" TextWrapping="Wrap" IsVisible="{Binding ElevationRestartFailed}"
+                     Text="{DynamicResource home.elevated_restart_failed}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- Drop zone: files dropped here open the donut toolbar at the cursor. Double-click opens file selector. -->
     <Border x:Name="DropZone" DragDrop.AllowDrop="True" MinHeight="220"
+            Cursor="Hand" ToolTip.Tip="{DynamicResource home.drop_select}"
             Background="{DynamicResource AccentFaintBrush}" BorderBrush="{DynamicResource AccentSoftBrush}"
             BorderThickness="2" CornerRadius="{DynamicResource SoftRadiusLarge}" Padding="24">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
@@ -59,7 +75,14 @@
         <Button DockPanel.Dock="Right" Classes="ghost" Content="{DynamicResource home.clear_history}" Command="{Binding ClearHistoryCommand}" />
         <TextBlock Classes="h2" VerticalAlignment="Center" Text="{DynamicResource home.recent}" />
       </DockPanel>
+      <TextBox Classes="search clearButton" Text="{Binding Search}" PlaceholderText="{DynamicResource common.search}"
+               IsVisible="{Binding !IsEmpty}">
+        <TextBox.InnerLeftContent>
+          <PathIcon Width="14" Height="14" Margin="10,0,0,0" Data="{StaticResource Icon.Search}" Foreground="{DynamicResource TextSecondaryBrush}" />
+        </TextBox.InnerLeftContent>
+      </TextBox>
       <TextBlock Classes="muted" Text="{DynamicResource home.recent_empty}" IsVisible="{Binding IsEmpty}" />
+      <TextBlock Classes="muted" Text="{DynamicResource home.no_matches}" IsVisible="{Binding NoMatches}" />
       <ItemsControl ItemsSource="{Binding History}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
@@ -68,24 +91,63 @@
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:HistoryItemViewModel">
-            <Border Classes="card" Padding="14,10">
+            <Border Classes="card history-card" Padding="14,10">
               <StackPanel Spacing="8">
                 <DockPanel>
-                  <Button DockPanel.Dock="Right" Command="{Binding OpenFolderCommand}" IsVisible="{Binding HasOutputs}" Padding="10,5">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Folder}" />
-                      <TextBlock Text="{DynamicResource home.open_folder}" />
-                    </StackPanel>
-                  </Button>
-                  <Border DockPanel.Dock="Left" Width="32" Height="32" CornerRadius="999" Margin="0,0,12,0"
-                          Background="{DynamicResource AccentSoftBrush}">
-                    <Panel>
-                      <PathIcon Width="15" Height="15" Data="{StaticResource Icon.Check}" Foreground="{DynamicResource AccentStrongBrush}" IsVisible="{Binding !HasErrors}" />
-                      <PathIcon Width="15" Height="15" Data="{StaticResource Icon.Alert}" Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding HasErrors}" />
-                    </Panel>
-                  </Border>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                              IsVisible="{Binding HasOutputs}">
+                    <Button Command="{Binding OpenFileCommand}" IsVisible="{Binding CanOpen}" Padding="10,5">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Width="13" Height="13" Data="{StaticResource Icon.File}" />
+                        <TextBlock Text="{DynamicResource home.open_file}" />
+                      </StackPanel>
+                    </Button>
+                    <!-- Only where the system has an "Open with" dialog (Windows). -->
+                    <Button Command="{Binding OpenWithCommand}" IsVisible="{Binding CanOpenWith}" Padding="8,5"
+                            ToolTip.Tip="{DynamicResource home.open_with}" AutomationProperties.Name="{DynamicResource home.open_with}">
+                      <PathIcon Width="13" Height="13" Data="{StaticResource Icon.OpenWith}" />
+                    </Button>
+                    <Button Command="{Binding OpenFolderCommand}" Padding="10,5">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Folder}" />
+                        <TextBlock Text="{DynamicResource home.open_folder}" />
+                      </StackPanel>
+                    </Button>
+                  </StackPanel>
+                  <!-- The result: its picture, else its format; the corner says whether the job went well. -->
+                  <Panel DockPanel.Dock="Left" Width="42" Height="42" Margin="0,0,12,0">
+                    <Border CornerRadius="{DynamicResource SoftRadiusSmall}" ClipToBounds="True" Background="{DynamicResource AccentSoftBrush}">
+                      <Panel>
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" IsVisible="{Binding HasThumbnail}" />
+                        <TextBlock Text="{Binding FormatBadge}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center">
+                          <TextBlock.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                              <Binding Path="!HasThumbnail" />
+                              <Binding Path="HasFormatBadge" />
+                            </MultiBinding>
+                          </TextBlock.IsVisible>
+                        </TextBlock>
+                        <PathIcon Width="15" Height="15" Data="{StaticResource Icon.Check}" Foreground="{DynamicResource AccentStrongBrush}">
+                          <PathIcon.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                              <Binding Path="!HasThumbnail" />
+                              <Binding Path="!HasFormatBadge" />
+                            </MultiBinding>
+                          </PathIcon.IsVisible>
+                        </PathIcon>
+                      </Panel>
+                    </Border>
+                    <Border Width="18" Height="18" CornerRadius="999" Margin="0,0,-4,-4" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                            Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1">
+                      <Panel>
+                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Check}" Foreground="{DynamicResource SuccessBrush}" IsVisible="{Binding !HasErrors}" />
+                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Alert}" Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding HasErrors}" />
+                      </Panel>
+                    </Border>
+                  </Panel>
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                    <TextBlock FontWeight="SemiBold" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <TextBlock Classes="caption" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" MaxWidth="420" />
                       <TextBlock Classes="caption" Text="·" />
@@ -95,7 +157,7 @@
                 </DockPanel>
 
                 <!-- Failed files: the list on demand, and converting them again -->
-                <DockPanel IsVisible="{Binding HasFailures}" Margin="44,0,0,0">
+                <DockPanel IsVisible="{Binding HasFailures}" Margin="54,0,0,0">
                   <Button DockPanel.Dock="Right" Command="{Binding RetryCommand}" IsVisible="{Binding CanRetry}" Padding="10,5">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Refresh}" />
@@ -104,13 +166,13 @@
                   </Button>
                   <Button Classes="ghost" Command="{Binding ToggleFailuresCommand}" Padding="6,4" HorizontalAlignment="Left">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Classes="chevron" Classes.open="{Binding ShowFailures}" Width="12" Height="12"
+                      <PathIcon Classes="chevron reading" Classes.open="{Binding ShowFailures}" Width="12" Height="12"
                                 Data="{StaticResource Icon.ChevronRight}" />
                       <TextBlock Classes="caption danger" Text="{Binding FailureSummary}" />
                     </StackPanel>
                   </Button>
                 </DockPanel>
-                <ItemsControl ItemsSource="{Binding Failures}" IsVisible="{Binding ShowFailures}" Margin="50,0,0,2">
+                <ItemsControl ItemsSource="{Binding Failures}" IsVisible="{Binding ShowFailures}" Margin="60,0,0,2">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <StackPanel Spacing="4" />

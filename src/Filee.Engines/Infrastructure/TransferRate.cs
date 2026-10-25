@@ -4,9 +4,12 @@
 namespace Filee.Engines.Infrastructure;
 
 /// <summary>Speed of a transfer computed from "bytes so far" samples over a sliding time window.</summary>
-public sealed class TransferRate(TimeSpan window)
+/// <param name="window">How far back the speed is averaged.</param>
+/// <param name="settle">How long the measured span must be before a speed is given (default half a second).</param>
+public sealed class TransferRate(TimeSpan window, TimeSpan? settle = null)
 {
     private readonly Queue<(TimeSpan Time, long Bytes)> _samples = new();
+    private readonly double _settleSeconds = (settle ?? TimeSpan.FromSeconds(0.5)).TotalSeconds;
 
     public TransferRate()
         : this(TimeSpan.FromSeconds(5))
@@ -25,7 +28,7 @@ public sealed class TransferRate(TimeSpan window)
             _samples.Dequeue();
         var (startTime, startBytes) = _samples.Peek();
         var seconds = (elapsed - startTime).TotalSeconds;
-        BytesPerSecond = seconds >= 0.5 ? Math.Max(0, bytes - startBytes) / seconds : BytesPerSecond;
+        BytesPerSecond = seconds >= _settleSeconds && seconds > 0 ? Math.Max(0, bytes - startBytes) / seconds : BytesPerSecond;
     }
 
     /// <summary>Estimated time until <paramref name="total"/> bytes are reached, or null while the speed is unknown.</summary>

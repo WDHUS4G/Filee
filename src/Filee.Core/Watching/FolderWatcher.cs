@@ -5,6 +5,7 @@
 // the output folder and the originals folder are never picked up, so converted files can't loop back in.
 
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Filee.Core.Conversion;
 using Filee.Core.Formats;
 using Filee.Core.Platform;
@@ -41,6 +42,7 @@ public sealed class FolderWatcher : IAsyncDisposable
     private readonly TimeSpan _settleTime;
     private readonly TimeProvider _time;
     private readonly ConcurrentDictionary<string, Candidate> _pending = new(FileSystemPaths.Comparer);
+    private readonly GeneratedWatchOutputs _results;
     private readonly HashSet<string> _handled = new(FileSystemPaths.Comparer);
     private readonly SemaphoreSlim _busy = new(1, 1);
     private readonly CancellationTokenSource _stop = new();
@@ -58,6 +60,12 @@ public sealed class FolderWatcher : IAsyncDisposable
         _log = log ?? NullLogger.Instance;
         _settleTime = settleTime ?? DefaultSettleTime;
         _time = time ?? TimeProvider.System;
+        _results = new GeneratedWatchOutputs(Rule);
+        try { _results.Load(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+        {
+            _log.LogWarning(ex, "Could not load generated results for watch folder {Folder}", Rule.Folder);
+        }
     }
 
     public WatchRule Rule { get; }
@@ -136,7 +144,7 @@ public sealed class FolderWatcher : IAsyncDisposable
             foreach (var (path, candidate) in _pending)
             {
                 var current = candidate.Refresh(path, now);
-                if (!current.Exists)
+                if (!current.Exists || _results.Contains(path))
                 {
                     _pending.TryRemove(path, out _);
                     continue;
@@ -157,6 +165,30 @@ public sealed class FolderWatcher : IAsyncDisposable
             var job = await _convert(ready, _stop.Token);
             if (job is not null)
             {
+                // A shared input/output folder cannot be excluded wholesale. Remember exactly what this batch
+                // wrote before the next batch runs, including results noticed while the conversion was busy.
+                var resultsChanged = false;
+                foreach (var output in job.Outputs.Distinct(FileSystemPaths.Comparer))
+                {
+                    // Dedicated output trees are already excluded. Only shared results need a state file.
+                    if (SameFolder(Rule.ResolvedOutputFolder, Rule.Folder)
+                        || !IsInside(Rule.ResolvedOutputFolder, Rule.Folder))
+                        resultsChanged |= _results.Remember(output);
+                    if (!Directory.Exists(output))
+                    {
+                        var result = Candidate.Of(output, _time.GetUtcNow());
+                        if (result.Exists)
+                            _handled.Add(result.Key(output));
+                    }
+                }
+                if (resultsChanged)
+                {
+                    try { _results.Save(); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        _log.LogWarning(ex, "Could not save generated results for watch folder {Folder}; they may be retried after restart", Rule.Folder);
+                    }
+                }
                 if (Rule.Originals == AfterConversion.MoveToOriginals)
                     foreach (var file in job.Files.Where(f => f.State == FileState.Done))
                         MoveToOriginals(Rule, file.SourcePath, _log);
@@ -183,7 +215,11 @@ public sealed class FolderWatcher : IAsyncDisposable
         if (name.Length == 0 || name.StartsWith("~$", StringComparison.Ordinal) || name.StartsWith('.')
             || SystemFiles.Contains(name) || TemporaryExtensions.Contains(Path.GetExtension(name)))
             return true;
-        if (IsInside(path, rule.ResolvedOutputFolder) || IsInside(path, rule.OriginalsFolder))
+        // Exclude a dedicated output subtree, but never exclude the entire watch root when output is the same
+        // folder or one of its parents (issue #234). The running watcher suppresses its actual results instead.
+        if (!SameFolder(rule.ResolvedOutputFolder, rule.Folder)
+            && IsInside(rule.ResolvedOutputFolder, rule.Folder) && IsInside(path, rule.ResolvedOutputFolder)
+            || IsInside(path, rule.OriginalsFolder))
             return true;
         if (!rule.IncludeSubfolders && !SameFolder(Path.GetDirectoryName(path), rule.Folder))
             return true;

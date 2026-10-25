@@ -19,6 +19,14 @@ public sealed class EngineInstallerTests : IDisposable
         try { Directory.Delete(_root, true); } catch (IOException) { }
     }
 
+    [Fact]
+    public void A_separate_data_folder_keeps_its_own_engines()
+    {
+        Assert.Equal(Path.Combine(_root, "engines"), EngineEnvironment.DefaultDownloadRoot(_root));
+        Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Filee", "engines"),
+            EngineEnvironment.DefaultDownloadRoot(null));
+    }
+
     /// <summary>Serves byte arrays by URL; a string value is a redirect target.</summary>
     private sealed class FakeServer(Dictionary<string, object> content) : HttpMessageHandler
     {
@@ -310,6 +318,37 @@ public sealed class EngineInstallerTests : IDisposable
     }
 
     /// <summary>IProgress that reports synchronously (Progress&lt;T&gt; would post to the thread pool).</summary>
+    [Fact]
+    public async Task A_tesseract_language_is_its_file_in_a_folder_of_its_own()
+    {
+        var data = Encoding.UTF8.GetBytes("lstm");
+        var german = Component("deu", "traineddata", data);
+        var installer = Installer(new FakeServer(new() { [german.Url] = data }), german);
+        var package = new EnginePackage("ocr-deu", ["deu"], data.Length, ["tesseract"]);
+
+        await installer.InstallAsync(package, null, TestContext.Current.CancellationToken);
+
+        Assert.Equal("lstm", File.ReadAllText(Path.Combine(_root, "deu", "deu.traineddata")));
+        Assert.True(installer.IsUpToDate(package));
+    }
+
+    [Fact]
+    public void Tesseract_keeps_only_what_ocr_needs()
+    {
+        var root = Path.Combine(_root, "tesseract");
+        foreach (var file in new[] { "tesseract.exe", "libtesseract-5.dll", "text2image.exe", "tesseract.1.html", "tesseract-uninstall.exe",
+                     "doc/LICENSE", "tessdata/eng.traineddata", "$PLUGINSDIR/System.dll" })
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(root, file))!);
+            File.WriteAllText(Path.Combine(root, file), "x");
+        }
+
+        EngineInstaller.TrimTesseract(root);
+
+        Assert.Equal(["doc/LICENSE", "libtesseract-5.dll", "tesseract.exe"],
+            Directory.GetFiles(root, "*", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(root, f).Replace('\\', '/')).Order(StringComparer.Ordinal));
+    }
+
     private sealed class SyncProgress(Action<EngineInstallProgress> report) : IProgress<EngineInstallProgress>
     {
         public void Report(EngineInstallProgress value) => report(value);

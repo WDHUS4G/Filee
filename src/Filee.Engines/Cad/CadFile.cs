@@ -1,19 +1,42 @@
-// Reads DWG / DXF files and writes DXF / DWG with ACadSharp (MIT). Output is always AutoCAD 2018 (AC1032): the
-// current DWG format (AutoCAD 2018–2026, DWG TrueView, BricsCAD, LibreCAD ...), and for DXF the first-choice
-// version whose text is UTF-8, so Korean and Chinese text survive without code page guessing.
+// Reads DWG / DXF files and writes DXF / DWG with ACadSharp (MIT). Output is AutoCAD 2018 (AC1032) unless the preset
+// asks for an older version (#489): 2018 is the current DWG format (AutoCAD 2018–2026, DWG TrueView, BricsCAD,
+// LibreCAD ...), and its text is UTF-8. Before 2007 text is in a code page, which CadCodePages picks from the text.
 
 using System.Text;
 using ACadSharp;
 using ACadSharp.Exceptions;
 using ACadSharp.IO;
+using Filee.Core.Presets;
 
 namespace Filee.Engines.Cad;
 
 /// <summary>DWG and DXF input and output.</summary>
 internal static class CadFile
 {
-    /// <summary>Version of every written DWG and DXF.</summary>
+    /// <summary>Version a DWG or DXF is written in unless the preset says otherwise.</summary>
     public const ACadVersion OutputVersion = ACadVersion.AC1032;
+
+    /// <summary>
+    /// The version to write for the preset's choice. "Same as the source" keeps the drawing's version within what
+    /// can be written (older than 2000 becomes 2000). ACadSharp can't write a 2007 DWG: chosen, it is written as 2004,
+    /// which AutoCAD 2007 opens; kept from a 2007 source, as 2010, which keeps its text in UTF-8.
+    /// </summary>
+    internal static ACadVersion VersionFor(CadVersion choice, ACadVersion source, string format)
+    {
+        var version = choice switch
+        {
+            CadVersion.AutoCad2013 => ACadVersion.AC1027,
+            CadVersion.AutoCad2010 => ACadVersion.AC1024,
+            CadVersion.AutoCad2007 => ACadVersion.AC1021,
+            CadVersion.AutoCad2004 => ACadVersion.AC1018,
+            CadVersion.AutoCad2000 => ACadVersion.AC1015,
+            CadVersion.SameAsSource => source < ACadVersion.AC1015 ? ACadVersion.AC1015 : source > OutputVersion ? OutputVersion : source,
+            _ => OutputVersion,
+        };
+        if (format == "dwg" && version == ACadVersion.AC1021)
+            return choice == CadVersion.SameAsSource ? ACadVersion.AC1024 : ACadVersion.AC1018;
+        return version;
+    }
 
     /// <summary>
     /// Reads a drawing. Binary and ASCII DXF are detected automatically. Throws <see cref="InvalidDataException"/>
@@ -55,8 +78,12 @@ internal static class CadFile
         }
     }
 
-    /// <summary>Writes the drawing as an AutoCAD 2018 DXF (ASCII) or DWG.</summary>
-    public static void Write(CadDocument document, string path, string format, Action<string>? warning = null)
+    /// <summary>
+    /// Writes the drawing as an ASCII DXF or a DWG, in AutoCAD 2018 or the version the preset chose. Returns how many
+    /// objects that version doesn't have were left out.
+    /// </summary>
+    public static int Write(CadDocument document, string path, string format, CadVersion version = CadVersion.AutoCad2018,
+        Action<string>? warning = null)
     {
         void Notify(object? sender, NotificationEventArgs e)
         {
@@ -64,9 +91,11 @@ internal static class CadFile
                 warning?.Invoke(e.Message);
         }
 
-        document.Header.Version = OutputVersion;
+        document.Header.Version = VersionFor(version, document.Header.Version, format);
         try
         {
+            var codePage = document.Header.Version < ACadVersion.AC1021 ? CadCodePages.Prepare(document) : 0;
+            var leftOut = DropNewerEntities(document, warning);
             DropStraySequenceEnds(document);
             if (format == "dwg")
             {
@@ -74,13 +103,45 @@ internal static class CadFile
                 DwgWriter.Write(path, document, new DwgWriterConfiguration(), Notify);
             }
             else
+            {
                 DxfWriter.Write(path, document, binary: false, new DxfWriterConfiguration(), Notify);
+                if (codePage == 949)
+                    NameKoreanCodePage(path);
+            }
+            return leftOut;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or IOException or UnauthorizedAccessException))
         {
             TryDelete(path);
             throw new InvalidDataException($"The drawing could not be written as {format.ToUpperInvariant()}: {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// Leaves out the objects the version being written doesn't have (AutoCAD before it would not open the file):
+    /// tables and arc dimensions before 2004 (AC1018), multileaders and PDF underlays before 2007 (AC1021), meshes before
+    /// 2010 (AC1024). Returns how many.
+    /// </summary>
+    private static int DropNewerEntities(CadDocument document, Action<string>? warning)
+    {
+        var version = document.Header.Version;
+        bool TooNew(ACadSharp.Entities.Entity entity) => entity switch
+        {
+            ACadSharp.Entities.TableEntity or ACadSharp.Entities.DimensionArc => version < ACadVersion.AC1018,
+            ACadSharp.Entities.MultiLeader or ACadSharp.Entities.PdfUnderlay => version < ACadVersion.AC1021,
+            ACadSharp.Entities.Mesh => version < ACadVersion.AC1024,
+            _ => false,
+        };
+        var count = 0;
+        foreach (var record in document.BlockRecords)
+            foreach (var entity in record.Entities.Where(TooNew).ToList())
+            {
+                record.Entities.Remove(entity);
+                count++;
+            }
+        if (count > 0)
+            warning?.Invoke($"{count} object(s) newer than {version} were left out.");
+        return count;
     }
 
     /// <summary>
@@ -162,6 +223,25 @@ internal static class CadFile
             bytes.AsSpan(value + 8).CopyTo(patched.AsSpan(value + replacement.Length));
             return new MemoryStream(patched, writable: false);
         }
+    }
+
+    /// <summary>
+    /// The DXF's $DWGCODEPAGE as AutoCAD writes it for Korean, ANSI_949, in place of the KCS5601 that ACadSharp needs
+    /// to encode the text in it (the reverse of <see cref="OpenDxf"/>).
+    /// </summary>
+    private static void NameKoreanCodePage(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        var head = Encoding.ASCII.GetString(bytes, 0, Math.Min(bytes.Length, 64 * 1024));
+        var key = head.IndexOf("$DWGCODEPAGE", StringComparison.Ordinal);
+        var value = key < 0 ? -1 : head.IndexOf("KCS5601", key, Math.Min(64, head.Length - key), StringComparison.Ordinal);
+        if (value < 0)
+            return;
+        var name = "ANSI_949"u8;
+        using var stream = File.Create(path);
+        stream.Write(bytes, 0, value);
+        stream.Write(name);
+        stream.Write(bytes, value + 7, bytes.Length - value - 7);
     }
 
     private static void TryDelete(string path)

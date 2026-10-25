@@ -43,6 +43,87 @@ public class FolderWatcherTests
     public void Default_wait_is_longer_where_files_being_written_are_not_locked() =>
         Assert.Equal(TimeSpan.FromSeconds(OperatingSystem.IsWindows() ? 2 : 5), FolderWatcher.DefaultSettleTime);
 
+    [Theory]
+    [InlineData(AfterConversion.Keep, false)]
+    [InlineData(AfterConversion.MoveToOriginals, false)]
+    [InlineData(AfterConversion.Keep, true)]
+    [InlineData(AfterConversion.MoveToOriginals, true)]
+    public async Task Output_can_share_the_watched_folder_without_converting_its_own_results(AfterConversion originals, bool trailingSeparator)
+    {
+        using var dir = new TempDir();
+        var rule = new WatchRule { Folder = dir.Path, OutputFolder = dir.Path + (trailingSeparator ? Path.DirectorySeparatorChar : ""), Originals = originals };
+        var (watcher, time, jobs, queue) = Create(rule);
+        await using var queueLifetime = queue;
+        await using var watcherLifetime = watcher;
+        var source = dir.File("photo.jpg");
+
+        watcher.Notice(source);
+        time.Advance(3);
+        Assert.Equal(1, await watcher.ProcessPendingAsync());
+        var output = Assert.Single(Assert.Single(jobs).Outputs);
+        Assert.Equal(Path.Combine(dir.Path, "photo.png"), output);
+        Assert.True(File.Exists(output));
+        Assert.Equal(originals == AfterConversion.Keep, File.Exists(source));
+        if (originals == AfterConversion.MoveToOriginals)
+            Assert.True(File.Exists(Path.Combine(rule.OriginalsFolder, "photo.jpg")));
+
+        watcher.Notice(output);
+        time.Advance(3);
+        Assert.Equal(0, await watcher.ProcessPendingAsync());
+        Assert.Single(jobs);
+
+        // A new incoming file still works after the result has been excluded.
+        watcher.Notice(dir.File("next.jpg"));
+        time.Advance(3);
+        Assert.Equal(1, await watcher.ProcessPendingAsync());
+        Assert.Equal(2, jobs.Count);
+    }
+
+    [Fact]
+    public async Task Shared_folder_results_survive_a_restart_but_a_replaced_file_is_new_input()
+    {
+        using var dir = new TempDir();
+        var rule = new WatchRule { Folder = dir.Path, OutputFolder = dir.Path, Originals = AfterConversion.MoveToOriginals };
+        var (first, firstTime, firstJobs, firstQueue) = Create(rule);
+        await using (firstQueue)
+        await using (first)
+        {
+            first.Notice(dir.File("photo.jpg"));
+            firstTime.Advance(3);
+            Assert.Equal(1, await first.ProcessPendingAsync());
+            Assert.Single(firstJobs);
+        }
+
+        var (restarted, time, jobs, queue) = Create(rule);
+        await using var queueLifetime = queue;
+        await using var watcherLifetime = restarted;
+        Assert.True(restarted.Start()); // inbox mode scans existing files on startup
+        time.Advance(3);
+        Assert.Equal(0, await restarted.ProcessPendingAsync());
+        Assert.Empty(jobs);
+        Assert.True(File.Exists(Path.Combine(dir.Path, "photo.png")));
+
+        // An incoming replacement with the old output's name must not be permanently blacklisted.
+        var replaced = Path.Combine(dir.Path, "photo.png");
+        File.WriteAllText(replaced, "a different incoming file, not the generated result");
+        restarted.Notice(replaced);
+        time.Advance(3);
+        Assert.Equal(1, await restarted.ProcessPendingAsync());
+        Assert.Single(jobs);
+    }
+
+    [Fact]
+    public void An_output_folder_above_the_watch_root_does_not_exclude_the_inputs()
+    {
+        using var dir = new TempDir();
+        var input = dir.File("photo.jpg");
+        Assert.False(FolderWatcher.ShouldIgnore(input, new WatchRule
+        {
+            Folder = dir.Path,
+            OutputFolder = Path.GetDirectoryName(dir.Path)!,
+        }));
+    }
+
     [Fact]
     public async Task A_file_is_converted_once_it_has_settled()
     {

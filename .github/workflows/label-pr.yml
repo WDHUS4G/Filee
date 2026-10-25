@@ -1,0 +1,55 @@
+name: Label pull requests
+
+# Labels a new pull request by the files it changes (.github/labeler.yml) and by a Conventional Commits title
+# ("feat: ...", "fix(hwp): ..."). Only when it is opened, and labels are only added: labels changed by hand later stay.
+#
+# pull_request_target runs in this repository with a token that can add labels, also for pull requests from forks. It
+# must never check out or run the pull request's code: labeler reads .github/labeler.yml from the base branch and the
+# changed file names through the API, and the title is read from the event payload, never put into the script.
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read        # .github/labeler.yml of the base branch
+      pull-requests: write  # add labels
+    steps:
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+        with:
+          sync-labels: false
+
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const pull = context.payload.pull_request;
+            const title = pull.title.toLowerCase();
+            const rules = [
+              [/^feat(\(.+\))?!?:/, 'feature'],
+              [/^fix(\(.+\))?!?:/, 'bug'],
+              [/^docs(\(.+\))?!?:/, 'documentation'],
+              [/^(build|ci)(\(.+\))?!?:/, 'build'],
+              [/^(i18n|l10n)(\(.+\))?!?:/, 'translation'],
+            ];
+            // Only labels the repository has: adding an unknown name would create a new label.
+            const known = new Set((await github.paginate(github.rest.issues.listLabelsForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            })).map(label => label.name));
+            const current = new Set(pull.labels.map(label => label.name));
+            const labels = rules.filter(([re]) => re.test(title)).map(([, label]) => label)
+              .filter(label => known.has(label) && !current.has(label));
+            if (labels.length) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pull.number,
+                labels,
+              });
+            }

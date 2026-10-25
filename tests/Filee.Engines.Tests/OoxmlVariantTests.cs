@@ -114,11 +114,11 @@ public class OoxmlVariantTests(EngineFixture fx) : IClassFixture<EngineFixture>
     public void Variants_are_converted_by_the_ooxml_engine_and_read_directly()
     {
         var planner = fx.Catalog.CreatePlanner();
-        foreach (var (from, to) in new[] { ("docm", "docx"), ("dotx", "docx"), ("docx", "dotm"), ("xlsm", "xlsx"), ("xlsx", "xltx"), ("pptm", "pptx"), ("potx", "pptx"), ("ppsx", "pptx"), ("pptx", "ppsx") })
+        foreach (var (from, to) in new[] { ("docm", "docx"), ("dotx", "docx"), ("docx", "dotm"), ("xlsm", "xlsx"), ("xlsx", "xltx"), ("pptm", "pptx"), ("potx", "pptx"), ("potm", "pptx"), ("pptm", "potm"), ("ppsx", "pptx"), ("pptx", "ppsx") })
             Assert.Equal("ooxml", Assert.Single(planner.Plan(from, to)!.Steps).Converter.Id);
         // Families never mix.
         Assert.DoesNotContain(fx.Converters.Single(c => c.Id == "ooxml").Edges, e => OoxmlConverter.Variants[e.From].Family != OoxmlConverter.Variants[e.To].Family);
-        foreach (var from in new[] { "docm", "dotx", "dotm", "xlsm", "xltx", "pptm", "potx", "ppsx" })
+        foreach (var from in new[] { "docm", "dotx", "dotm", "xlsm", "xltx", "pptm", "potx", "potm", "ppsx" })
             Assert.Equal("hwpx-writer", Assert.Single(planner.Plan(from, "hwpx")!.Steps).Converter.Id);
         Assert.Equal("spreadsheet", Assert.Single(planner.Plan("xlsm", "csv")!.Steps).Converter.Id);
         Assert.Equal("spreadsheet", Assert.Single(planner.Plan("xltx", "csv")!.Steps).Converter.Id);
@@ -222,5 +222,32 @@ public class OoxmlVariantTests(EngineFixture fx) : IClassFixture<EngineFixture>
 
         var docx = await ConvertAsync(ppsx, "docx");
         DocxAssert.ValidPackage(docx);
+    }
+
+    [Fact]
+    public async Task Macro_enabled_templates_keep_macros_only_where_allowed()
+    {
+        var dir = fx.NewFolder();
+        var pptx = new PptxBuilder();
+        pptx.Slide(pptx.Title("매크로 서식"));
+        var source = pptx.Save(Path.Combine(dir, "서식.pptx"));
+        var pptm = AddMacros(source, "pptm", dir);
+        File.Delete(source);
+
+        var potm = await ConvertAsync(pptm, "potm");
+        Assert.Equal(".potm", Path.GetExtension(potm));
+        using (var template = PresentationDocument.Open(potm, false))
+            Assert.Equal(PresentationDocumentType.MacroEnabledTemplate, template.DocumentType);
+        using (var zip = ZipFile.OpenRead(potm))
+            Assert.NotNull(zip.GetEntry("ppt/vbaProject.bin"));
+
+        File.Delete(pptm);
+        var fromTemplate = await ConvertAsync(potm, "pptx");
+        AssertNoMacros(fromTemplate);
+        using (var presentation = PresentationDocument.Open(fromTemplate, false))
+            Assert.Equal(PresentationDocumentType.Presentation, presentation.DocumentType);
+
+        DocxAssert.ValidPackage(await ConvertAsync(potm, "docx"));
+        HwpxAssert.ValidPackage(await ConvertAsync(potm, "hwpx"));
     }
 }

@@ -14,10 +14,15 @@
 //  * The first conversion with a new profile takes 2-3× longer (LibreOffice builds its caches), so WarmUpAsync
 //    converts a tiny file once per worker profile in the background. --terminate_after_init alone doesn't help.
 //  * soffice reports no progress: ProgressEstimate keeps the progress ring moving while it runs.
+//  * Its ZIP reader refuses some containers other readers open (Tencent Docs exports, issue #141), saying only "source
+//    file could not be loaded": an Office Open XML / OpenDocument file is tried once more as a repacked copy.
 
 using Filee.Core.Conversion;
 using Filee.Core.Formats;
 using Filee.Engines.Infrastructure;
+using Filee.Engines.Pdf;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 
@@ -59,7 +64,11 @@ public sealed class LibreOfficeConverter : IConverter
     /// </summary>
     private static readonly string[] DrawOnlyFor = ["svg", "pdf"];
 
+    /// <summary>Outputs for which LibreOffice lays out document text rather than preserving it for a later editor.</summary>
+    private static readonly HashSet<string> RenderedTargets = ["pdf", "png", "svg", "emf", "wmf"];
+
     private readonly EngineEnvironment _env;
+    private readonly ILogger _logger;
 
     // A worker profile must never be used by two soffice processes at once: conversions and the warm-up take a
     // profile number from _freeProfiles (guarded by itself) after _capacity lets them in.
@@ -68,9 +77,11 @@ public sealed class LibreOfficeConverter : IConverter
     private string? _soffice;
     private bool _hasHwpFilter;
 
-    public LibreOfficeConverter(EngineEnvironment env)
+    /// <param name="logger">The app's log; notes when a file only loaded after its container was repacked.</param>
+    public LibreOfficeConverter(EngineEnvironment env, ILogger? logger = null)
     {
         _env = env;
+        _logger = logger ?? NullLogger.Instance;
         Locate();
         Edges = BuildEdges(_hasHwpFilter, EngineEnvironment.LibreOfficeForSlides, EngineEnvironment.LibreOfficeForHwp,
             EngineEnvironment.LibreOfficeForDocuments, EngineEnvironment.LibreOfficeForSheets);
@@ -97,21 +108,43 @@ public sealed class LibreOfficeConverter : IConverter
     public async Task<IReadOnlyList<string>> ConvertAsync(ConversionStep step, IProgress<double>? progress, CancellationToken cancellationToken)
     {
         var soffice = _soffice ?? throw new InvalidOperationException("LibreOffice was not found.");
+        if (RenderedTargets.Contains(step.To) && DocumentFonts.Missing(step.OriginalSourcePath ?? step.InputPath) is [_, ..] missing)
+            step.MissingFonts?.Invoke(missing);
         var slot = await TakeProfileAsync(cancellationToken);
         try
         {
-            var outDir = Path.Combine(step.WorkDirectory, "lo-" + Guid.NewGuid().ToString("N")[..8]);
-            Directory.CreateDirectory(outDir);
-
             progress?.Report(0.1);
             var input = step.From == "pdf" && step.To == "svg" ? FirstPage(step) : step.InputPath;
-            ProcessResult result;
-            using (ProgressEstimate.Start(progress, TypicalDuration))
-                result = await RunAsync(soffice, slot, FilterFor(step.From, step.To, step.Preset.Document.PdfA, FormatRegistry.ExtensionOf(step.InputPath)), outDir, input, cancellationToken);
-            var produced = Directory.EnumerateFiles(outDir).FirstOrDefault(f => new FileInfo(f).Length > 0);
+            var filter = FilterFor(step.From, step.To, step.Preset.Document.PdfA, FormatRegistry.ExtensionOf(step.InputPath));
+            var (produced, result) = await ConvertOnceAsync(soffice, slot, filter, step.WorkDirectory, input, progress, cancellationToken);
+            if (produced is null && Repack(step.InputPath, step.WorkDirectory) is { } repacked)
+            {
+                _logger.LogInformation("{File}: LibreOffice could not load it, trying again with the ZIP container repacked", step.InputPath);
+                (produced, _) = await ConvertOnceAsync(soffice, slot, filter, step.WorkDirectory, repacked, progress, cancellationToken);
+                _logger.LogInformation("{File}: the repacked copy {Result}", step.InputPath, produced is null ? "failed too" : "converted");
+            }
+            // The first attempt's error, which is about the user's own file.
             if (produced is null)
                 throw new InvalidOperationException(
                     $"LibreOffice produced no output (exit {result.ExitCode}). {result.StandardError.Trim()}");
+
+            // Calc sometimes turns stale Excel print tiles into completely empty PDF pages anywhere in the output.
+            // Only remove pages with no painting operation at all; pages containing text, borders, charts, pictures
+            // or annotations stay. PDF/A is never rewritten: doing so would invalidate LibreOffice's XMP metadata.
+            try
+            {
+                var removed = RemoveEmptySpreadsheetPages(step, produced);
+                if (removed > 0)
+                {
+                    _logger.LogInformation("{File}: removed {Count} empty spreadsheet PDF pages", step.InputPath, removed);
+                    step.Notice?.Invoke("notice.empty_spreadsheet_pages_removed");
+                }
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // Post-processing is an improvement, not a reason to discard LibreOffice's otherwise valid PDF.
+                _logger.LogInformation("{File}: could not check empty spreadsheet PDF pages: {Message}", step.InputPath, e.Message);
+            }
 
             var target = step.Output.Allocate(step.To);
             if (target is null)
@@ -123,6 +156,50 @@ public sealed class LibreOfficeConverter : IConverter
         finally
         {
             ReturnProfile(slot);
+        }
+    }
+
+    /// <summary>
+    /// Removes empty Calc PDF pages when that post-processing is safe. PDF/A stays byte-for-byte as LibreOffice wrote
+    /// it because PDFsharp changes the Info dictionary without updating the archival XMP metadata.
+    /// </summary>
+    internal static int RemoveEmptySpreadsheetPages(ConversionStep step, string path) =>
+        step.To == "pdf" && !step.Preset.Document.PdfA
+        && FamilyOf(step.From, FormatRegistry.ExtensionOf(step.InputPath)) == "calc"
+            ? PdfBlankPages.Remove(path) : 0;
+
+    /// <summary>Runs LibreOffice into a fresh folder; returns the file it wrote (null if none) and how it ended.</summary>
+    private async Task<(string? Produced, ProcessResult Result)> ConvertOnceAsync(string soffice, int slot, string filter, string workDirectory,
+        string input, IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        var outDir = Path.Combine(workDirectory, "lo-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(outDir);
+        ProcessResult result;
+        using (ProgressEstimate.Start(progress, TypicalDuration))
+            result = await RunAsync(soffice, slot, filter, outDir, input, cancellationToken);
+        return (Directory.EnumerateFiles(outDir).FirstOrDefault(f => new FileInfo(f).Length > 0), result);
+    }
+
+    /// <summary>
+    /// A copy of an Office Open XML or OpenDocument file with its ZIP container rewritten by <see cref="PackageRepacker"/>,
+    /// under the same file name (LibreOffice also goes by the name). Null for other files and unreadable containers.
+    /// </summary>
+    private string? Repack(string input, string workDirectory)
+    {
+        if (!PackageRepacker.IsPackage(input))
+            return null;
+        try
+        {
+            var folder = Path.Combine(workDirectory, "lo-repack-" + Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(folder);
+            var copy = Path.Combine(folder, Path.GetFileName(input));
+            PackageRepacker.Repack(input, copy);
+            return copy;
+        }
+        catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogInformation("{File}: could not repack the ZIP container: {Message}", input, e.Message);
+            return null;
         }
     }
 
@@ -342,9 +419,31 @@ public sealed class LibreOfficeConverter : IConverter
     private void Locate()
     {
         _soffice = EngineEnvironment.OwnProgram("libreoffice", "soffice.exe")
-            ?? EngineEnvironment.BundledProgram("libreoffice", "soffice.exe")
+            ?? WithRuntime(EngineEnvironment.BundledProgram("libreoffice", "soffice.exe"))
             ?? EngineEnvironment.SystemProgram("libreoffice", "soffice.exe");
         _hasHwpFilter = _soffice is not null && HasH2Orestart(_soffice);
+    }
+
+    /// <summary>
+    /// Filee's copy as earlier versions installed it has LibreOffice's C++ runtime only in System64, where soffice.exe
+    /// does not look (see <see cref="AppLocalRuntime.CopyLibreOfficeRuntime"/>): copied next to it once, so LibreOffice
+    /// also starts on PCs without the Visual C++ Redistributable.
+    /// </summary>
+    private string? WithRuntime(string? soffice)
+    {
+        if (soffice is null || !OperatingSystem.IsWindows())
+            return soffice;
+        try
+        {
+            var copied = AppLocalRuntime.CopyLibreOfficeRuntime(Directory.GetParent(Path.GetDirectoryName(soffice)!)!.FullName);
+            if (copied > 0)
+                _logger.LogInformation("Copied {Count} C++ runtime files next to {Program}", copied, soffice);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not copy the C++ runtime next to {Program}", soffice);
+        }
+        return soffice;
     }
 
     /// <summary>Detects the H2Orestart extension in the installation (shared) extension folders.</summary>

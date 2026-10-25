@@ -1,6 +1,7 @@
 // Usage text of the "filee" command.
 
 using System.Reflection;
+using Filee.Core.Watching;
 
 namespace Filee.Cli;
 
@@ -55,12 +56,13 @@ internal static class Help
               --overwrite        Replace existing output files (default: add a number)
               --skip             Leave existing output files alone
               --keep-dates       Give converted files the created and modified dates of the originals
+              --zip              Save the result of each file as one ZIP (a Shapefile's files together)
               --json             Print the result as JSON (for scripts and other programs)
               --quiet            Print nothing but errors
 
         """;
 
-    private const string Watch = """
+    private static string Watch => FormattableString.Invariant($"""
         Usage: filee watch <folder> (--to <format> | --preset <preset>) [options]
 
         Converts files that land in the folder until Ctrl+C. Files are converted once they are complete (no
@@ -73,9 +75,10 @@ internal static class Help
           -r, --recursive        Also watch sub folders (their files keep the sub folder in the output)
               --move-originals   Move converted sources to <folder>\originals; files already waiting are
                                  converted at start
-              --settle <seconds> How long a file must stay unchanged (default 2)
+              --settle <seconds> How long a file must stay unchanged (default {FolderWatcher.DefaultSettleTime.TotalSeconds})
               --keep-dates       Give converted files the created and modified dates of the originals
+              --zip              Save the result of each file as one ZIP (a Shapefile's files together)
               --quiet            Print nothing but errors
 
-        """;
+        """);
 }

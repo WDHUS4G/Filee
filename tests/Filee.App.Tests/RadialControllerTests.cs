@@ -5,6 +5,7 @@
 using Avalonia.Headless.XUnit;
 using Filee.App.Controls;
 using Filee.App.Services;
+using Filee.Core.Presets;
 
 namespace Filee.App.Tests;
 
@@ -56,5 +57,25 @@ public class RadialControllerTests
 
         Assert.False(radial.IsVisible);
         Assert.False(radial.Window.IsVisible);
+    }
+
+    [Fact]
+    public void Folders_only_go_into_one_archive()
+    {
+        var folder = Directory.CreateTempSubdirectory("filee-donut-folder-").FullName;
+        try
+        {
+            var file = Path.Combine(folder, "1.png");
+            var zip = new Preset { TargetFormat = "zip", Archive = { CombineIntoOne = true } };
+
+            // Issue #186: a dragged folder goes into "Compress into one archive"; other presets take only the files.
+            Assert.Equal([folder, file], RadialController.SourcesFor(zip, [folder, file]));
+            Assert.Equal([file], RadialController.SourcesFor(new Preset { TargetFormat = "jpg" }, [folder, file]));
+            Assert.Empty(RadialController.SourcesFor(new Preset { TargetFormat = "zip" }, [folder]));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 }

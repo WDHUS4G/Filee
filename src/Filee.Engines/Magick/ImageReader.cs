@@ -1,8 +1,8 @@
 // Reads source images with ImageMagick, handling the formats that need more than "open the file": camera RAW
 // (LibRaw settings), layered PSD/PSB/XCF (one flattened picture instead of one file per layer) and Windows
 // metafiles (rendered at the preset's DPI), APNG (Filee's own reader composes the frames) and uncompressed DICOM
-// (Filee's own reader, as ImageMagick's Q8 build reads only 8-bit DICOM). Used by every engine that takes a raster
-// image as input.
+// (Filee's own reader, as ImageMagick's Q8 build reads only 8-bit DICOM), FITS (Filee's own reader, stretched and
+// debayered as the preset says) and the photo of an iPhone LIVP. Used by every engine that takes a raster image as input.
 
 using System.Buffers.Binary;
 using Filee.Core.Presets;
@@ -27,6 +27,10 @@ internal static class ImageReader
             return Apng.Read(path);
         if (formatId == "dcm" && Dicom.TryRead(path) is { } scan)
             return scan;
+        if (formatId == "livp")
+            return ReadLivePhoto(path, preset);
+        if (formatId == "fits")
+            return [FitsRendering.ToMagick(Fits.Read(path), preset.Image.FitsDebayer)];
 
         var images = new MagickImageCollection();
         var settings = Settings(formatId, preset);
@@ -81,6 +85,25 @@ internal static class ImageReader
             return [flat];
         }
         return images;
+    }
+
+    /// <summary>The photo (JPEG or HEIC) of a LIVP, read from the package without unpacking it.</summary>
+    private static MagickImageCollection ReadLivePhoto(string path, Preset preset)
+    {
+        var (data, format) = Media.LivePhotoSource.ReadStill(path);
+        var settings = Settings(format, preset);
+        settings.Format = ImageEncoder.ToMagickFormat(format);
+        var images = new MagickImageCollection();
+        try
+        {
+            images.Read(data, settings);
+            return images;
+        }
+        catch
+        {
+            images.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Read settings per source format.</summary>

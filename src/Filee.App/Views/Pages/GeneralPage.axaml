@@ -10,9 +10,19 @@
       <StackPanel Spacing="14">
         <StackPanel>
           <TextBlock Classes="label" Text="{DynamicResource general.language}" />
-          <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" MinWidth="240" />
+          <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" MinWidth="240" AutomationProperties.Name="{DynamicResource general.language}" />
         </StackPanel>
         <ToggleSwitch Content="{DynamicResource general.start_with_system}" IsChecked="{Binding StartWithSystem}" />
+        <ToggleSwitch x:Name="ShowInDockSwitch" Content="{DynamicResource general.show_in_dock}"
+                      IsChecked="{Binding ShowInDock}" IsVisible="{Binding SupportsDockVisibility}" />
+        <ToggleSwitch x:Name="ShowMenuBarIconSwitch" Content="{DynamicResource general.show_menu_bar_icon}"
+                      IsChecked="{Binding ShowMenuBarIcon}" IsVisible="{Binding SupportsDockVisibility}" />
+        <TextBlock Classes="caption" TextWrapping="Wrap" Text="{Binding DockStatus}"
+                   IsVisible="{Binding DockStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <StackPanel>
+          <TextBlock Classes="label" Text="{DynamicResource general.close_action}" />
+          <ComboBox ItemsSource="{Binding CloseChoices}" SelectedItem="{Binding CloseChoice}" MinWidth="240" AutomationProperties.Name="{DynamicResource general.close_action}" />
+        </StackPanel>
         <ToggleSwitch Content="{Binding ContextMenuText}" IsChecked="{Binding ContextMenu}" IsVisible="{Binding HasSystemIntegration}" />
         <TextBlock Classes="caption" TextWrapping="Wrap" Text="{Binding IntegrationMessage}"
                    IsVisible="{Binding IntegrationMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -32,20 +42,40 @@
       <StackPanel Spacing="10">
         <TextBlock Classes="h2" Text="{DynamicResource general.default_output}" />
         <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource general.default_output_hint}" />
-        <ComboBox ItemsSource="{Binding OutputLocations}" SelectedItem="{Binding DefaultLocation}" MinWidth="240" />
+        <ComboBox ItemsSource="{Binding OutputLocations}" SelectedItem="{Binding DefaultLocation}" MinWidth="240" AutomationProperties.Name="{DynamicResource general.default_output}" />
         <StackPanel IsVisible="{Binding ShowDefaultSubfolder}">
           <TextBlock Classes="label" Text="{DynamicResource presets.subfolder}" />
-          <TextBox Text="{Binding DefaultSubfolder}" PlaceholderText="converted" MaxWidth="420" HorizontalAlignment="Left" MinWidth="240" />
+          <TextBox Text="{Binding DefaultSubfolder}" PlaceholderText="converted" MaxWidth="420" HorizontalAlignment="Left" MinWidth="240"
+                   AutomationProperties.Name="{DynamicResource presets.subfolder}" />
         </StackPanel>
         <StackPanel IsVisible="{Binding ShowDefaultFolder}">
           <TextBlock Classes="label" Text="{DynamicResource presets.custom_folder}" />
           <DockPanel MaxWidth="560" HorizontalAlignment="Stretch">
             <Button DockPanel.Dock="Right" Margin="8,0,0,0" Content="{DynamicResource presets.browse}" Click="OnBrowseDefaultFolder" />
-            <TextBox Text="{Binding DefaultFolder}" />
+            <TextBox Text="{Binding DefaultFolder}" AutomationProperties.Name="{DynamicResource presets.custom_folder}" />
           </DockPanel>
         </StackPanel>
         <ToggleSwitch Content="{DynamicResource general.keep_dates}" IsChecked="{Binding KeepFileDates}" />
         <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource general.keep_dates_hint}" Margin="0,-6,0,0" />
+        <ToggleSwitch Content="{DynamicResource general.zip_geo}" IsChecked="{Binding ZipGeoResults}" />
+        <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource general.zip_geo_hint}" Margin="0,-6,0,0" />
+      </StackPanel>
+    </Border>
+
+    <!-- Pictures, links and downloads dragged out of a web browser (AppSettings.BrowserDrops). -->
+    <Border Classes="card">
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h2" Text="{DynamicResource general.browser_drops}" />
+        <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource general.browser_drops_hint}" />
+        <StackPanel>
+          <TextBlock Classes="label" Text="{DynamicResource general.browser_drops_folder}" />
+          <DockPanel HorizontalAlignment="Left">
+            <Button DockPanel.Dock="Right" Margin="8,0,0,0" Content="{DynamicResource presets.browse}" Click="OnBrowseBrowserFolder" />
+            <TextBox Text="{Binding BrowserFolder}" PlaceholderText="{Binding DownloadsFolder}" Width="440" />
+          </DockPanel>
+        </StackPanel>
+        <CheckBox Content="{DynamicResource general.browser_drops_only_converted}" IsChecked="{Binding SaveOnlyConverted}" />
+        <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource general.browser_drops_only_converted_hint}" Margin="0,-6,0,0" />
       </StackPanel>
     </Border>
 
@@ -53,6 +83,11 @@
       <StackPanel Spacing="12">
         <TextBlock Classes="h2" Text="{DynamicResource general.history}" />
         <ToggleSwitch Content="{DynamicResource general.no_history}" IsChecked="{Binding NoHistory}" />
+        <StackPanel IsVisible="{Binding !NoHistory}">
+          <TextBlock Classes="label" Text="{DynamicResource general.history_limit}" />
+          <NumericUpDown Value="{Binding HistoryLimit}" Minimum="50" Maximum="2000" Increment="50" FormatString="0"
+                         HorizontalAlignment="Left" MinWidth="160" AutomationProperties.Name="{DynamicResource general.history_limit}" />
+        </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="10">
           <Button Content="{DynamicResource general.clear_history}" Command="{Binding ClearHistoryCommand}" />
           <TextBlock Classes="muted" VerticalAlignment="Center" Text="{Binding HistoryText}" />

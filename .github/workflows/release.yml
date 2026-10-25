@@ -1,8 +1,11 @@
 # Builds the Windows installer and publishes it to GitHub Releases.
 # Trigger: push a tag like v1.0.0  (git tag v1.0.0 && git push origin v1.0.0)
 #
-# Output (build/build-installer.ps1): Filee-<version>-win-Setup.exe (Inno Setup, installer/Filee.iss),
+# Output (build/build-installer.ps1): Filee-<version>-win-Setup.exe (Filee's own installer, src/Filee.Setup),
 # Filee-<version>-win-Portable.zip and Filee-<version>-SHA256SUMS.txt.
+# The release is a draft with the Linux and macOS packages: the Windows files are signed on a PC signed in to Certum's
+# SimplySign cloud (its key needs a phone token), so this run keeps the tested, unsigned build as the artifact
+# windows-unsigned, and build/sign-release.ps1 signs it, packs Setup again, uploads the Windows files and publishes.
 # Release notes: the version's section of CHANGELOG.md (what changed, for people using Filee), then the list GitHub
 # generates from the pull requests merged since the previous release, grouped by label (.github/release.yml), with
 # their authors and new contributors.
@@ -27,9 +30,9 @@ jobs:
     needs: portable
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -45,7 +48,7 @@ jobs:
         run: ./build/fetch-fonts.ps1
 
       - name: Restore Zig toolchain
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: build/.cache/zig-x86_64-windows-0.16.0
           key: zig-0.16.0-x86_64-windows
@@ -74,32 +77,51 @@ jobs:
 
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-windows
           path: TestResults/
           if-no-files-found: ignore
 
       # Publishes the app (Release, self-contained, ReadyToRun) with the Explorer menu extension and the bundled rhwp
-      # and 7-Zip, then compiles the installer (portable Inno Setup, pinned and verified) and zips the portable copy.
+      # and 7-Zip and the Microsoft C++ runtime, publishes Setup (one self-contained file), appends the app to it as a
+      # checked payload and zips the portable copy.
       - name: Build installer and portable zip
         shell: pwsh
         run: ./build/build-installer.ps1 -Version ${{ steps.version.outputs.value }} -Portable
 
+      # The publish folder and the Setup program as tested, for build/sign-release.ps1 (artifacts leave out hidden
+      # folders such as build/.cache, so both are moved into one folder first).
+      - name: Keep the unsigned Windows build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path unsigned | Out-Null
+          Move-Item publish/win-x64 unsigned/app
+          Copy-Item build/.cache/setup/Filee.Setup.exe unsigned/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-unsigned
+          path: unsigned/
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Download Linux and macOS packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: portable-*
           merge-multiple: true
           path: Releases
 
-      - name: Publish the GitHub release
+      - name: Draft the GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $version = '${{ steps.version.outputs.value }}'
-          $files = Get-ChildItem Releases -File -Filter "Filee-$version-*" | ForEach-Object FullName
+          # Linux and macOS only: build/sign-release.ps1 adds the signed Windows files.
+          $windows = "Filee-$version-win-Setup.exe", "Filee-$version-win-Portable.zip", "Filee-$version-SHA256SUMS.txt"
+          $files = Get-ChildItem Releases -File -Filter "Filee-$version-*" | Where-Object Name -notin $windows | ForEach-Object FullName
           # "## 1.4.0" up to the next "## " heading of CHANGELOG.md, without the heading itself.
           $changes = ''
           $changelog = Get-Content CHANGELOG.md -Raw -Encoding utf8
@@ -125,4 +147,4 @@ jobs:
           if ($tail) { $parts += $tail }
           $notesFile = Join-Path $env:RUNNER_TEMP 'notes.md'
           Set-Content $notesFile ($parts -join "`n`n") -Encoding utf8
-          gh release create '${{ github.ref_name }}' --title "Filee $version" --notes-file $notesFile --verify-tag @files
+          gh release create '${{ github.ref_name }}' --draft --title "Filee $version" --notes-file $notesFile --verify-tag @files

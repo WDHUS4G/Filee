@@ -23,6 +23,17 @@ public sealed class FfmpegCollection;
 [Collection(nameof(FfmpegCollection))]
 public class MediaTests(EngineFixture fx) : IClassFixture<EngineFixture>
 {
+    [Fact]
+    public void Cri_usm_game_videos_go_to_mp4_through_ffmpeg()
+    {
+        // #485: read only, through FFmpeg's usm demuxer; never a step towards something else.
+        SkipUnlessInstalled();
+        var route = fx.Catalog.CreatePlanner().Plan("usm", "mp4");
+        Assert.NotNull(route);
+        Assert.Equal("ffmpeg", Assert.Single(route.Steps).Converter.Id);
+        Assert.Null(fx.Catalog.CreatePlanner().Plan("mp4", "usm"));
+    }
+
     private static readonly (string Ffmpeg, string Ffprobe)? Tools = FfmpegConverter.Locate();
 
     private static void SkipUnlessInstalled() =>
@@ -54,6 +65,7 @@ public class MediaTests(EngineFixture fx) : IClassFixture<EngineFixture>
     [InlineData("mov", "apng")]
     [InlineData("rm", "mp4")]
     [InlineData("dss", "mp3")]
+    [InlineData("mp4", "png")]
     [InlineData("ape", "flac")]
     [InlineData("wv", "mp3")]
     [InlineData("tta", "wv")]
@@ -82,6 +94,77 @@ public class MediaTests(EngineFixture fx) : IClassFixture<EngineFixture>
         var route = Planner().Plan(from, to);
         Assert.NotNull(route);
         Assert.Equal([("ffmpeg", from, "png"), (imageEngine, "png", to)], route.Steps.Select(s => (s.Converter.Id, s.From, s.To)));
+        Assert.DoesNotContain(route.Steps, s => s.FrameSequence);
+    }
+
+    [Theory]
+    [InlineData("mp4", "png")]
+    [InlineData("mov", "jpg")]
+    [InlineData("mkv", "jpg")]
+    public void Every_frame_is_one_ffmpeg_step_only_when_asked_for(string from, string to)
+    {
+        var frames = Planner().Plan(from, to, frames: true);
+        Assert.NotNull(frames);
+        var step = Assert.Single(frames.Steps);
+        Assert.Equal(("ffmpeg", from, to, true), (step.Converter.Id, step.From, step.To, step.FrameSequence));
+
+        // Without it the same conversion is the still frame, as before.
+        var still = Planner().Plan(from, to);
+        Assert.NotNull(still);
+        Assert.DoesNotContain(still.Steps, s => s.FrameSequence);
+        Assert.Equal(("ffmpeg", from, "png"), (still.Steps[0].Converter.Id, still.Steps[0].From, still.Steps[0].To));
+    }
+
+    [Theory]
+    [InlineData("mp4", "webp")] // frames are PNG or JPG only, never a step towards another format
+    [InlineData("png", "jpg")] // not a video
+    [InlineData("gif", "png")]
+    public void Every_frame_has_no_route_but_its_own(string from, string to) =>
+        Assert.Null(Planner().Plan(from, to, frames: true));
+
+    [Theory]
+    [InlineData("jpg", "wav")]
+    [InlineData("png", "mp3")]
+    [InlineData("gif", "flac")]
+    public void A_picture_never_becomes_sound(string from, string to)
+    {
+        // Picture → video → audio would only make a silent file.
+        Assert.Null(Planner().Plan(from, to));
+        Assert.NotNull(Planner().Plan("mp4", to)); // a video still gives its sound
+    }
+
+    [Theory]
+    [InlineData("jpg", "srt")]
+    [InlineData("png", "vtt")]
+    [InlineData("gif", "ass")]
+    public void A_picture_never_becomes_subtitles(string from, string to)
+    {
+        // Picture → video → subtitles would only find none.
+        Assert.Null(Planner().Plan(from, to));
+        Assert.NotNull(Planner().Plan("mkv", to)); // a video still gives its subtitle track
+    }
+
+    [Fact]
+    public void A_video_to_jpg_is_still_turned_by_the_image_engine()
+    {
+        // Rotate and flip presets on a video: the still frame is turned by ImageMagick, as before frames existed.
+        var route = Planner().Plan("mp4", "jpg");
+        Assert.NotNull(route);
+        Assert.Equal(1, route.FirstTransformStep());
+    }
+
+    [Fact]
+    public void Ordinary_routes_never_take_a_frame_step()
+    {
+        var planner = Planner();
+        foreach (var from in FormatRegistry.Known.Where(f => f.Category == FormatCategory.Video).Select(f => f.Id))
+        {
+            foreach (var to in new[] { "jpg", "png", "webp", "pdf", "tiff", "gif", "mp4" })
+            {
+                if (planner.Plan(from, to) is { } route)
+                    Assert.DoesNotContain(route.Steps, s => s.FrameSequence);
+            }
+        }
     }
 
     [Theory]
@@ -536,7 +619,8 @@ public class MediaTests(EngineFixture fx) : IClassFixture<EngineFixture>
         var job = await fx.ConvertAsync([input], preset);
         Assert.True(job.State == JobState.Completed, string.Join("; ", job.Files.Select(f => $"{f.ErrorKey} {f.ErrorDetail}")));
         var output = Assert.Single(job.Outputs);
-        Assert.Equal("." + FormatRegistry.Get(target).PrimaryExtension, Path.GetExtension(output));
+        if (!Directory.Exists(output))
+            Assert.Equal("." + FormatRegistry.Get(target).PrimaryExtension, Path.GetExtension(output));
         return output;
     }
 
@@ -813,6 +897,106 @@ public class MediaTests(EngineFixture fx) : IClassFixture<EngineFixture>
     }
 
     [Fact]
+    public async Task Video_to_image_slices_frames_to_unique_subfolders()
+    {
+        SkipUnlessInstalled();
+        var folder = fx.NewFolder();
+        var source = await MakeClipAsync(folder, "seq.mkv", seconds: 2, size: "640x360");
+
+        var options = new MediaOptions { SaveEveryFrame = true };
+        var pngFolder1 = await ConvertAsync(source, "png", options);
+        Assert.True(Directory.Exists(pngFolder1));
+        Assert.Equal(Path.Combine(folder, "seq_frames"), pngFolder1);
+        var png1Files = Directory.GetFiles(pngFolder1, "frame_*.png");
+        Assert.NotEmpty(png1Files);
+        Assert.Contains(png1Files, f => Path.GetFileName(f) == "frame_000001.png");
+
+        // A second run creates a unique folder seq_frames (2) instead of writing into an existing one.
+        var pngFolder2 = await ConvertAsync(source, "png", options);
+        Assert.True(Directory.Exists(pngFolder2));
+        Assert.Equal(Path.Combine(folder, "seq_frames (2)"), pngFolder2);
+        Assert.NotEmpty(Directory.GetFiles(pngFolder2, "frame_*.png"));
+
+        // JPG sequence extraction also creates unique folder and valid images
+        var jpgFolder = await ConvertAsync(source, "jpg", options);
+        Assert.True(Directory.Exists(jpgFolder));
+        Assert.Equal(Path.Combine(folder, "seq_frames (3)"), jpgFolder);
+        var jpgFiles = Directory.GetFiles(jpgFolder, "frame_*.jpg");
+        Assert.NotEmpty(jpgFiles);
+        Assert.Contains(jpgFiles, f => Path.GetFileName(f) == "frame_000001.jpg");
+        using var image = new ImageMagick.MagickImage(jpgFiles.First());
+        Assert.True(image.Width > 0 && image.Height > 0);
+    }
+
+    [Fact]
+    public void Video_frame_sequence_arguments_use_proper_flags()
+    {
+        var video = new VideoStreamInfo(720, 480, 8.0 / 9.0, 0, 30);
+        var jpg = MediaEncoding.FrameSequence("in.mp4", "out_frames/frame_%06d.jpg", "jpg", video, quality: 100, frameInterval: 5);
+        Assert.Contains("-q:v", jpg);
+        Assert.Equal("2", After(jpg, "-q:v"));
+        Assert.Contains("-vf", jpg);
+        var vf = After(jpg, "-vf");
+        Assert.Contains("scale=w='trunc(iw*sar/2)*2':h=ih,setsar=1", vf);
+        Assert.Contains("select='not(mod(n\\,5))'", vf);
+        Assert.Contains("-fps_mode", jpg);
+        Assert.Equal("vfr", After(jpg, "-fps_mode"));
+        Assert.Equal("out_frames/frame_%06d.jpg", jpg[^1]);
+
+        Assert.Equal("0:V:0", After(jpg, "-map"));
+
+        // Every frame: each decoded frame once, never paced to a constant rate.
+        var every = MediaEncoding.FrameSequence("in.mp4", "out_frames/frame_%06d.png", "png", video);
+        Assert.Equal("passthrough", After(every, "-fps_mode"));
+        Assert.Equal("0:V:0", After(every, "-map"));
+        Assert.Equal("png", After(every, "-c:v"));
+
+        Assert.DoesNotContain("-q:v", every);
+        Assert.EndsWith("setsar=1,null", After(every, "-vf")); // square pixels, no frame left out
+        Assert.Equal("out_frames/frame_%06d.png", every[^1]);
+    }
+
+    [Fact]
+    public void Every_frame_is_estimated_before_anything_is_written()
+    {
+        var hd = new VideoStreamInfo(1920, 1080, 1, 0, 30);
+        var hour = new MediaInfo(TimeSpan.FromHours(1), hd, null, null);
+        // An hour at 30 fps: 108,000 pictures, over the limit; every second frame is fine.
+        Assert.Equal(108_000, FrameSequenceWriter.EstimatedFrames(hour, 1));
+        Assert.Equal(54_000, FrameSequenceWriter.EstimatedFrames(hour, 2));
+        Assert.True(FrameSequenceWriter.EstimatedFrames(hour, 1) > MediaOptions.MaxFrames);
+        // Unknown duration or frame rate: no estimate, no refusal.
+        Assert.Null(FrameSequenceWriter.EstimatedFrames(hour with { Duration = null }, 1));
+        Assert.Null(FrameSequenceWriter.EstimatedFrames(hour with { Video = hd with { FrameRate = 0 } }, 1));
+
+        // Full HD: about 3 MB a PNG, half a MB a JPG; 10-bit video becomes 16-bit PNG, twice the size.
+        Assert.Equal(3_110_400, FrameSequenceWriter.EstimatedBytes(hd, "png", 1));
+        Assert.Equal(518_400, FrameSequenceWriter.EstimatedBytes(hd, "jpg", 1));
+        Assert.Equal(6_220_800, FrameSequenceWriter.EstimatedBytes(hd with { PixelFormat = "yuv420p10le" }, "png", 1));
+    }
+
+    [Fact]
+    public async Task Every_frame_of_a_variable_frame_rate_video_is_saved_once()
+    {
+        SkipUnlessInstalled();
+        var folder = fx.NewFolder();
+        // One second at 30 fps, then three seconds at 10 fps: 60 frames, as a phone records a darker scene. Paced to a
+        // constant 30 fps the slow part would come out three times over (120 pictures).
+        var source = Path.Combine(folder, "vfr.mkv");
+        await RunAsync(Tools!.Value.Ffmpeg,
+        [
+            "-hide_banner", "-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=160x120:rate=30:duration=2",
+            "-vf", "setpts='if(lt(N,30),N/30,1+(N-30)/10)/TB'", "-fps_mode", "vfr", "-c:v", "libx264", "-pix_fmt", "yuv420p", source,
+        ]);
+        var decoded = (await ProbeAsync(source)).Video!.Frames;
+        Assert.Equal(60, decoded);
+
+        var frames = await ConvertAsync(source, "png", new MediaOptions { SaveEveryFrame = true });
+
+        Assert.Equal(decoded, Directory.GetFiles(frames, "*.png").Length);
+    }
+
+    [Fact]
     public async Task Odd_sized_surround_video_is_encoded_everywhere()
     {
         SkipUnlessInstalled();
@@ -958,7 +1142,7 @@ public class MediaTests(EngineFixture fx) : IClassFixture<EngineFixture>
 
         public string? Allocate(string extension, string? suffix = null)
         {
-            var path = Path.Combine(folder, $"out{suffix}.{extension}");
+            var path = Path.Combine(folder, extension.Length == 0 ? $"out{suffix}" : $"out{suffix}.{extension}");
             Allocated.Add(path);
             return path;
         }
@@ -1045,6 +1229,56 @@ public class MediaTests(EngineFixture fx) : IClassFixture<EngineFixture>
         Assert.False(RunningFfmpeg(Tools.Value.Ffmpeg));
     }
 
+    [Fact]
+    public async Task Cancelling_every_frame_leaves_no_pictures_behind()
+    {
+        SkipUnlessInstalled();
+        var folder = fx.NewFolder();
+        var source = await MakeClipAsync(folder, "cancelframes.mp4", seconds: 60, size: "1280x720", audio: false,
+            extra: ["-c:v", "libx264", "-preset", "ultrafast"]);
+        using var cancellation = new CancellationTokenSource();
+        var recorder = new Recorder(v =>
+        {
+            if (v > 0.05)
+                cancellation.Cancel();
+        });
+        var converter = new FfmpegConverter();
+        converter.GetStatus();
+        var preset = new Preset { TargetFormat = "png", Media = { SaveEveryFrame = true } };
+        var step = new ConversionStep(source, "mp4", "png", preset, new FolderAllocator(folder), folder, FrameSequence: true);
+        cancellation.CancelAfter(TimeSpan.FromSeconds(30)); // in case no progress arrives at all
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => converter.ConvertAsync(step, recorder, cancellation.Token));
+
+        // Neither the output folder nor the hidden one the frames were written into is left, and FFmpeg has ended.
+        Assert.Equal([Path.Combine(folder, "out_frames")], ((FolderAllocator)step.Output).Allocated);
+        Assert.Equal([source], Directory.GetFileSystemEntries(folder));
+        Assert.False(RunningFfmpeg(Tools!.Value.Ffmpeg));
+    }
+
+    [Fact]
+    public async Task Every_frame_goes_into_its_own_folder_named_like_other_outputs()
+    {
+        SkipUnlessInstalled();
+        var folder = fx.NewFolder();
+        var source = await MakeClipAsync(folder, "100% clip.mkv", seconds: 1, size: "160x120", fps: 10, audio: false);
+        var preset = new Preset { TargetFormat = "jpg", Media = { SaveEveryFrame = true } };
+
+        var first = Assert.Single((await fx.ConvertAsync([source], preset)).Outputs);
+        var second = Assert.Single((await fx.ConvertAsync([source], preset)).Outputs);
+        preset.Output.Conflict = ConflictPolicy.Skip;
+        var skipped = await fx.ConvertAsync([source], preset);
+
+        Assert.Equal(Path.Combine(folder, "100% clip_frames"), first);
+        Assert.Equal(Path.Combine(folder, "100% clip_frames (2)"), second);
+        Assert.Empty(skipped.Outputs);
+        Assert.Equal(FileState.Skipped, skipped.Files.Single().State);
+        Assert.Equal(10, Directory.GetFiles(first, "frame_*.jpg").Length);
+        Assert.False(new DirectoryInfo(first).Attributes.HasFlag(FileAttributes.Hidden));
+        // Nothing else next to the source: no hidden folder left over.
+        Assert.Equal(3, Directory.GetFileSystemEntries(folder).Length);
+    }
+
     /// <summary>
     /// True if a process started from <paramref name="exe"/> is running (tests of this class run one at a time, so
     /// it can only be the one that should have been killed).
@@ -1067,5 +1301,43 @@ public class MediaTests(EngineFixture fx) : IClassFixture<EngineFixture>
             }
         }
         return false;
+    }
+
+    // ───────────────────────── Video CD (issue #292) ─────────────────────────
+
+    [Theory]
+    [InlineData("mp4")]
+    [InlineData("mkv")]
+    public async Task A_video_cd_dat_file_converts_with_its_picture_and_sound(string target)
+    {
+        SkipUnlessInstalled();
+        var folder = fx.NewFolder();
+        // A Video CD keeps its MPEG-1 streams in MPEGAV/AVSEQ01.DAT.
+        var input = Path.Combine(folder, "AVSEQ01.DAT");
+        var create = await ProcessRunner.RunAsync(Tools!.Value.Ffmpeg,
+            ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=352x288:rate=25",
+             "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "0.4",
+             "-target", "pal-vcd", "-f", "mpeg", input], TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.True(create.ExitCode == 0, create.StandardError);
+        Assert.Equal("mpg", FormatRegistry.Detect(input)?.Id);
+
+        var job = await fx.ConvertAsync([input], new Preset { TargetFormat = target });
+
+        Assert.True(job.State == JobState.Completed, string.Join("; ", job.Files.Select(f => f.ErrorDetail)));
+        var decode = await ProcessRunner.RunAsync(Tools.Value.Ffmpeg,
+            ["-v", "error", "-i", Assert.Single(job.Outputs), "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"],
+            TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.True(decode.ExitCode == 0, decode.StandardError);
+    }
+
+    [Fact]
+    public async Task A_dat_file_that_is_no_video_fails()
+    {
+        SkipUnlessInstalled();
+        var input = Path.Combine(fx.NewFolder(), "database.dat");
+        await File.WriteAllTextAsync(input, "This is application data, not a video.", TestContext.Current.CancellationToken);
+        var job = await fx.ConvertAsync([input], new Preset { TargetFormat = "mp4" });
+        Assert.Equal(JobState.Failed, job.State);
+        Assert.Empty(job.Outputs);
     }
 }

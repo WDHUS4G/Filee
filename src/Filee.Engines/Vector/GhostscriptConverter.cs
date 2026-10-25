@@ -1,9 +1,11 @@
 // PostScript and EPS with Ghostscript (AGPL-3.0, a separate program downloaded on demand into engines/ghostscript).
 // EPS/PS → PDF with pdfwrite; PDF → EPS/PS with eps2write/ps2write; EPS/PS → PNG with pngalpha, which keeps a
 // transparent background (through PDF the page would be drawn on white paper). Everything else (EPS → JPG,
-// SVG → EPS, …) is planned through PDF or PNG by the route planner.
+// SVG → EPS, …) is planned through PDF or PNG by the route planner. "Compress PDF" may also run a PDF through pdfwrite
+// (PdfSharpConverter calls CompressPdfAsync; there is no PDF → PDF edge here, so routes don't change).
 
 using Filee.Core.Conversion;
+using Filee.Core.Presets;
 using Filee.Engines.Infrastructure;
 using Filee.Engines.Magick;
 using ImageMagick;
@@ -89,6 +91,26 @@ public sealed class GhostscriptConverter : IConverter, IImageTransformer
         if (crop)
             args.Add("-dEPSCrop");
         await RunAsync(gs, args, target, input, cancellationToken, progress);
+        File.Move(target, output, overwrite: true);
+    }
+
+    /// <summary>
+    /// Rewrites a PDF smaller with pdfwrite's settings for the level (/screen, /ebook, /printer: pictures at 72, 150 and
+    /// 300 dpi, Filee's levels too). Used by <see cref="Pdf.PdfSharpConverter"/> for "Compress PDF" when the preset asks
+    /// for Ghostscript; the caller keeps the result only when it is smaller.
+    /// </summary>
+    internal static async Task CompressPdfAsync(string gs, string input, string output, PdfCompression level, string workDirectory,
+        CancellationToken cancellationToken)
+    {
+        var settings = level switch
+        {
+            PdfCompression.Screen => "/screen",
+            PdfCompression.Print => "/printer",
+            _ => "/ebook",
+        };
+        var target = Path.Combine(NewScratch(workDirectory), "out.pdf");
+        List<string> args = ["-sDEVICE=pdfwrite", "-dPDFSETTINGS=" + settings, "-dCompatibilityLevel=1.6", "-dAutoRotatePages=/None"];
+        await RunAsync(gs, args, target, input, cancellationToken, progress: null);
         File.Move(target, output, overwrite: true);
     }
 

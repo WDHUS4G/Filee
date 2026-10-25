@@ -11,6 +11,7 @@ using Filee.Core.Localization;
 using Filee.Core.Platform;
 using Filee.Core.Presets;
 using Filee.Core.Settings;
+using Filee.Core.Web;
 
 namespace Filee.App.Services;
 
@@ -26,18 +27,20 @@ public sealed class ConversionService
     private readonly UserDataStore _store;
     private readonly ILocalizer _loc;
     private readonly IPlatformServices _platform;
+    private readonly WebDownloader _downloader;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, JobViewModel> _byId = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, TaskCompletionSource<ConversionJob>> _waiting = new();
 
     /// <summary>Jobs that came from a watch folder: job id → rule id (for the history and for retrying).</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _watchJobs = new();
 
-    public ConversionService(JobQueue queue, UserDataStore store, ILocalizer loc, IPlatformServices platform)
+    public ConversionService(JobQueue queue, UserDataStore store, ILocalizer loc, IPlatformServices platform, WebDownloader downloader)
     {
         _queue = queue;
         _store = store;
         _loc = loc;
         _platform = platform;
+        _downloader = downloader;
         _queue.JobUpdated += OnJobUpdated;
         _queue.JobFinished += OnJobFinished;
     }
@@ -58,14 +61,28 @@ public sealed class ConversionService
     /// <param name="files">Source files.</param>
     /// <param name="preset">Preset to apply.</param>
     /// <param name="showInToast">False when another view (the donut's progress ring) displays the job first.</param>
+    /// <param name="web">
+    /// The browser drop <paramref name="files"/> stand for: the job saves them first, into the folder Settings ›
+    /// General names for files from a browser. The job owns it from now on (disposed here when nothing starts).
+    /// </param>
     /// <returns>The job's view model, or null when there was nothing to convert.</returns>
-    public JobViewModel? Start(IReadOnlyList<string> files, Preset preset, bool showInToast = true)
+    public JobViewModel? Start(IReadOnlyList<string> files, Preset preset, bool showInToast = true, WebDrop? web = null)
     {
-        if (files.Count == 0 || preset.IsGroup)
+        if (files.Count == 0 || preset.IsGroup || preset.IsTool)
+        {
+            web?.Dispose();
             return null;
+        }
         // A preset on "Default" saves where Settings > General says (read now, so a changed default applies at once).
         preset = _store.Settings.WithDefaultOutput(preset);
-        var job = _queue.Enqueue(files, preset, _loc.DisplayName(preset));
+        WebDropFetcher? fetcher = null;
+        if (web is not null)
+        {
+            fetcher = web.CreateFetcher(BrowserDropOptions(), _downloader);
+            // "Next to the source" is the download folder, also when the original is only kept until converted.
+            preset = fetcher.Apply(preset);
+        }
+        var job = _queue.Enqueue(files, preset, _loc.DisplayName(preset), fetcher);
         var vm = new JobViewModel(job, _loc, _platform, Remove, RetryFailed);
         _byId[job.Id] = vm;
         Jobs.Insert(0, vm);
@@ -90,12 +107,57 @@ public sealed class ConversionService
         var files = sources.Where(Exists).Distinct(StringComparer.Ordinal).ToList();
         if (files.Count == 0)
             return null;
+        // History keeps no PDF password: it comes from the preset when that still has one (else the job refuses).
+        if (preset.Pdf.PasswordLeftOut && _store.FindPreset(preset.Id)?.Pdf.Password is { Length: > 0 } password)
+        {
+            preset = preset.Clone();
+            preset.Pdf.Password = password;
+            preset.Pdf.PasswordLeftOut = false;
+        }
         if (watchRuleId is not null && WatchRetry is { } watchRetry)
         {
             _ = watchRetry(watchRuleId, files, preset);
             return null;
         }
         return Start(files, preset);
+    }
+
+    /// <summary>
+    /// Saves a browser drop's files for a tool (the crop overlay), which needs them on disk before anything else
+    /// happens: always into the download folder, as the tool shows and keeps working on the original. Files that can't
+    /// be saved are left out (<paramref name="failed"/> hears why). The drop is done afterwards.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> SaveBrowserFilesAsync(WebDrop web, Action<string, Exception> failed)
+    {
+        try
+        {
+            var fetcher = web.CreateFetcher(BrowserDropOptions() with { SaveOnlyConverted = false }, _downloader);
+            var saved = new List<string>();
+            foreach (var placeholder in web.Placeholders)
+            {
+                try
+                {
+                    saved.Add(await fetcher.FetchAsync(placeholder, new Progress<TransferProgress>(), CancellationToken.None));
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    failed(placeholder, ex);
+                }
+            }
+            return saved;
+        }
+        finally
+        {
+            web.Dispose();
+        }
+    }
+
+    /// <summary>Where files dragged from a browser are saved, as Settings › General says now.</summary>
+    public WebDropOptions BrowserDropOptions()
+    {
+        var settings = _store.Settings.BrowserDrops;
+        var folder = string.IsNullOrWhiteSpace(settings.Folder) ? _platform.DownloadsFolder : settings.Folder.Trim();
+        return new WebDropOptions(folder, settings.SaveOnlyConverted);
     }
 
     /// <summary>True when a source file (or folder) is still where it was.</summary>

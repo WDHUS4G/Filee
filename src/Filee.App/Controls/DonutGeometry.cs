@@ -32,6 +32,15 @@ public enum DonutHitKind
 /// <param name="Sub">With <see cref="DonutHitKind.SubSegment"/>: which of the group's presets.</param>
 public readonly record struct DonutHit(DonutHitKind Kind, int Index = -1, int Sub = -1);
 
+/// <summary>One step of a slice's outline: a straight line to <paramref name="To"/>, or (<paramref name="ArcRadius"/> &gt; 0) an arc.</summary>
+public readonly record struct OutlineStep(Point To, double ArcRadius = 0, bool IsLargeArc = false, bool Clockwise = true)
+{
+    public bool IsArc => ArcRadius > 0;
+}
+
+/// <summary>A closed slice outline, starting at <paramref name="Start"/>; <paramref name="CornerRadius"/> is the rounding used after clamping.</summary>
+public sealed record WedgeOutline(Point Start, IReadOnlyList<OutlineStep> Steps, double CornerRadius);
+
 /// <summary>Geometry helpers.</summary>
 public static class DonutGeometry
 {
@@ -115,4 +124,121 @@ public static class DonutGeometry
             return new DonutHit(DonutHitKind.EmptyRing);
         return new DonutHit(DonutHitKind.Segment, IndexAt(AngleOf(center, p), count));
     }
+
+    /// <summary>Rounding below this (in pixels) is not visible: the slice stays sharp.</summary>
+    public const double MinCornerRadius = 0.25;
+
+    /// <summary>
+    /// Outline of a slice of <paramref name="span"/> radians centred on <paramref name="mid"/>, between
+    /// <paramref name="innerRadius"/> and <paramref name="outerRadius"/>, with a constant <paramref name="gap"/> to its
+    /// neighbours. <paramref name="cornerRadius"/> rounds its four corners (the theme's softness); it shrinks to what fits
+    /// a thin or short slice, and 0 gives the sharp slice. The rounding only cuts into the corners, so the slice stays
+    /// inside its sharp shape and the gap between slices stays the same. Hit testing keeps the sharp sector: a corner cut
+    /// away still belongs to the slice whose angle it is in.
+    /// </summary>
+    public static WedgeOutline Wedge(Point center, double innerRadius, double outerRadius, double mid, double span, double gap,
+        double cornerRadius = 0)
+    {
+        var outerHalf = Math.Max(0.001, span / 2 - gap / 2 / outerRadius);
+        var innerHalf = Math.Max(0.001, span / 2 - gap / 2 / innerRadius);
+        var outerStart = PointAt(center, outerRadius, mid - outerHalf);
+        var innerStart = PointAt(center, innerRadius, mid - innerHalf);
+
+        var radius = Math.Min(cornerRadius, (outerRadius - innerRadius) / 2);
+        if (radius > MinCornerRadius)
+        {
+            if (Rounded(center, innerRadius, outerRadius, mid, outerHalf, innerHalf, radius) is { } rounded)
+                return rounded;
+            // Too thin or short for it: the largest rounding that fits, found by halving, so a slice growing in (the
+            // edit preview) rounds smoothly instead of in steps.
+            WedgeOutline? best = null;
+            double low = 0, high = radius;
+            for (var step = 0; step < 14; step++)
+            {
+                var r = (low + high) / 2;
+                if (Rounded(center, innerRadius, outerRadius, mid, outerHalf, innerHalf, r) is { } fits)
+                    (best, low) = (fits, r);
+                else
+                    high = r;
+            }
+            if (best is not null && low > MinCornerRadius)
+                return best;
+        }
+
+        return new WedgeOutline(outerStart,
+        [
+            new OutlineStep(PointAt(center, outerRadius, mid + outerHalf), outerRadius, outerHalf * 2 > Math.PI, Clockwise: true),
+            new OutlineStep(PointAt(center, innerRadius, mid + innerHalf)),
+            new OutlineStep(innerStart, innerRadius, innerHalf * 2 > Math.PI, Clockwise: false),
+        ], 0);
+    }
+
+    /// <summary>The slice with corners of <paramref name="radius"/>, or null when they don't fit.</summary>
+    private static WedgeOutline? Rounded(Point center, double r1, double r2, double mid, double outerHalf, double innerHalf, double radius)
+    {
+        // The slice is symmetric about its middle: work out the corners on its start side and mirror them.
+        var outerSide = PointAt(center, r2, mid - outerHalf);
+        var innerSide = PointAt(center, r1, mid - innerHalf);
+        if (Corner(center, outerSide, innerSide, r2, radius, outer: true) is not { } o ||
+            Corner(center, outerSide, innerSide, r1, radius, outer: false) is not { } i)
+            return null;
+        // The two corners on a side must not overlap, nor reach past the middle into the other side's.
+        if (o.Along >= i.Along || Offset(center, o.Center, mid) >= 0 || Offset(center, i.Center, mid) >= 0)
+            return null;
+
+        Point Mirror(Point p) => PointAt(center, Distance(center, p), 2 * mid - AngleOf(center, p));
+        var outerArc = -Offset(center, o.Center, mid);
+        var innerArc = -Offset(center, i.Center, mid);
+        return new WedgeOutline(o.OnArc,
+        [
+            new OutlineStep(Mirror(o.OnArc), r2, outerArc > Math.PI / 2, Clockwise: true),
+            new OutlineStep(Mirror(o.OnLine), radius),
+            new OutlineStep(Mirror(i.OnLine)),
+            new OutlineStep(Mirror(i.OnArc), radius),
+            new OutlineStep(i.OnArc, r1, innerArc > Math.PI / 2, Clockwise: false),
+            new OutlineStep(i.OnLine, radius),
+            new OutlineStep(o.OnLine),
+            new OutlineStep(o.OnArc, radius),
+        ], radius);
+    }
+
+    /// <summary>
+    /// The rounded corner where the slice's start side (the line from <paramref name="outerSide"/> to
+    /// <paramref name="innerSide"/>) meets the circle of <paramref name="circle"/>: the centre of its arc, where it touches
+    /// the circle and the side, and how far along the side (from <paramref name="outerSide"/>) it touches it.
+    /// </summary>
+    private static (Point Center, Point OnArc, Point OnLine, double Along)? Corner(Point center, Point outerSide, Point innerSide,
+        double circle, double radius, bool outer)
+    {
+        var length = Distance(outerSide, innerSide);
+        if (length <= 0)
+            return null;
+        var u = new Vector((innerSide.X - outerSide.X) / length, (innerSide.Y - outerSide.Y) / length);
+        // Into the slice: the start side's normal on the clockwise (increasing angle) side.
+        var tangent = new Vector(Math.Cos(AngleOf(center, outerSide)), Math.Sin(AngleOf(center, outerSide)));
+        var n = new Vector(-u.Y, u.X);
+        if (n.X * tangent.X + n.Y * tangent.Y < 0)
+            n = -n;
+
+        // The arc's centre lies `radius` inside the side, and touches the circle: inside it for the outer edge, outside
+        // the hole for the inner one. The nearer of the two crossings is on this side of the middle.
+        var distance = outer ? circle - radius : circle + radius;
+        var w = outerSide + n * radius - center;
+        var b = w.X * u.X + w.Y * u.Y;
+        var disc = b * b - (w.X * w.X + w.Y * w.Y - distance * distance);
+        if (disc < 0)
+            return null;
+        var t = -b - Math.Sqrt(disc);
+        if (t < 0 || t > length)
+            return null;
+        var c = outerSide + n * radius + u * t;
+        var toCenter = new Vector(c.X - center.X, c.Y - center.Y);
+        var onArc = center + toCenter / toCenter.Length * circle;
+        return (c, onArc, outerSide + u * t, t);
+    }
+
+    /// <summary>Signed angle of <paramref name="p"/> from <paramref name="mid"/>, -π..π (negative before it).</summary>
+    private static double Offset(Point center, Point p, double mid) => Math.IEEERemainder(AngleOf(center, p) - mid, 2 * Math.PI);
+
+    private static double Distance(Point a, Point b) => Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
 }

@@ -24,7 +24,15 @@ public sealed class MacOSPlatformServices : IPlatformServices
 
     public bool SupportsSelectionShortcut => true;
 
+    /// <summary>Whether Filee can change its visibility in the macOS Dock.</summary>
+    public bool SupportsDockVisibility => true;
+
+    /// <summary>Changes whether Filee appears in the macOS Dock.</summary>
+    public bool TrySetShowInDock(bool show) => NativeMethods.SetShowInDock(show);
+
     public string? LastSelectionError { get; private set; }
+
+    public TrashRefusal? MoveToTrash(string path) => NativeMethods.MoveToTrash(path);
 
     public bool IsFileManagerAt(int x, int y) =>
         string.Equals(ProcessNameAt(x, y), "Finder", StringComparison.OrdinalIgnoreCase);
@@ -101,6 +109,9 @@ public sealed class MacOSPlatformServices : IPlatformServices
         Run("/usr/bin/open", File.Exists(fullPath) ? ["-R", fullPath] : [fullPath], 10_000);
     }
 
+    /// <summary>Through open(1), like a double-click in Finder.</summary>
+    public void OpenFile(string path) => Run("/usr/bin/open", [Path.GetFullPath(path)], 10_000);
+
     public void OpenAccessibilitySettings() =>
         Run("/usr/bin/open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"], 10_000);
 
@@ -108,6 +119,16 @@ public sealed class MacOSPlatformServices : IPlatformServices
     {
         if (windowHandle != 0)
             NativeMethods.RaiseTopmost(windowHandle);
+    }
+
+    /// <summary>
+    /// Lets drags that offer file paths or file promises in older forms reach the window (the donut), not just ones
+    /// offering file URLs: other file managers than Finder write those (issue #160).
+    /// </summary>
+    public void AcceptFileDrags(nint windowHandle)
+    {
+        if (windowHandle != 0)
+            NativeMethods.AddDraggedTypes(windowHandle, PasteboardPaths.DragTypes);
     }
 
     internal static IReadOnlyList<string> ParseSelection(string json) =>

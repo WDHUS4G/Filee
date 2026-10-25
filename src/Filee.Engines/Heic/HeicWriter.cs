@@ -31,21 +31,10 @@ internal static class HeicWriter
             var picture = pictures[i];
             var share = 0.85 / pictures.Count;
             var start = 0.15 + i * share;
-            var stream = Path.Combine(step.WorkDirectory, $"heic-{Guid.NewGuid():N}.hevc");
-            var (columns, rows, tileWidth, tileHeight) = Layout(picture.Width, picture.Height);
-
-            ProcessResult result;
+            byte[] heif;
             using (ProgressEstimate.Start(progress, TimeSpan.FromSeconds(5), start, start + share * 0.95))
-                result = await FfmpegRunner.RunAsync(ffmpeg, Arguments(picture.Png, stream, picture.Width, picture.Height,
-                    step.Preset.Image.Quality), null, cancellationToken);
-            if (result.ExitCode != 0)
-            {
-                var reason = FfmpegRunner.Summarize(result.StandardError);
-                throw new InvalidOperationException($"FFmpeg failed (exit code {result.ExitCode}){(reason.Length > 0 ? ": " + reason : ".")}");
-            }
-
-            var heif = HeifFile.Write(new HeifImage(picture.Width, picture.Height, HevcStream.Parse(await File.ReadAllBytesAsync(stream, cancellationToken)),
-                tileWidth, tileHeight, columns, rows, picture.IccProfile, picture.Exif));
+                heif = await EncodeAsync(ffmpeg, picture.Png, picture.Width, picture.Height, picture.IccProfile, picture.Exif,
+                    step.Preset.Image.Quality, step.WorkDirectory, cancellationToken);
             var output = step.Output.Allocate("heic", pictures.Count > 1 ? $"_p{i + 1}" : null);
             if (output is null)
                 continue;
@@ -54,6 +43,26 @@ internal static class HeicWriter
         }
         progress?.Report(1);
         return written;
+    }
+
+    /// <summary>
+    /// A HEIC file of the 8-bit RGB PNG <paramref name="png"/> (<paramref name="width"/> × <paramref name="height"/>)
+    /// with its colour profile and Exif (a TIFF header, or "Exif\0\0" and one): x265 encodes the tiles into the work
+    /// directory, HeifFile puts them together.
+    /// </summary>
+    internal static async Task<byte[]> EncodeAsync(string ffmpeg, string png, int width, int height, byte[]? iccProfile, byte[]? exif,
+        int quality, string workDirectory, CancellationToken cancellationToken)
+    {
+        var stream = Path.Combine(workDirectory, $"heic-{Guid.NewGuid():N}.hevc");
+        var (columns, rows, tileWidth, tileHeight) = Layout(width, height);
+        var result = await FfmpegRunner.RunAsync(ffmpeg, Arguments(png, stream, width, height, quality), null, cancellationToken);
+        if (result.ExitCode != 0)
+        {
+            var reason = FfmpegRunner.Summarize(result.StandardError);
+            throw new InvalidOperationException($"FFmpeg failed (exit code {result.ExitCode}){(reason.Length > 0 ? ": " + reason : ".")}");
+        }
+        return HeifFile.Write(new HeifImage(width, height, HevcStream.Parse(await File.ReadAllBytesAsync(stream, cancellationToken)),
+            tileWidth, tileHeight, columns, rows, iccProfile, exif));
     }
 
     /// <summary>

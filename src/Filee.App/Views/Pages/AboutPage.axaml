@@ -20,6 +20,13 @@
               <TextBlock Text="{Binding RepositoryUrl}" Foreground="{DynamicResource AccentBrush}" />
             </StackPanel>
           </Button>
+          <!-- This version's "What's new" slides again -->
+          <Button x:Name="WhatsNewLink" Classes="ghost" Padding="0" Command="{Binding ShowWhatsNewCommand}" IsVisible="{Binding HasWhatsNew}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Info}" Foreground="{DynamicResource AccentBrush}" />
+              <TextBlock Text="{Binding WhatsNewText}" Foreground="{DynamicResource AccentBrush}" />
+            </StackPanel>
+          </Button>
         </StackPanel>
       </StackPanel>
     </Border>
@@ -65,7 +72,8 @@
     <Border Classes="card">
       <StackPanel Spacing="8">
         <TextBlock Classes="h2" Text="{DynamicResource about.notices}" />
-        <c:MarkdownView Markdown="{Binding Notices}" SkipTitle="True" />
+        <!-- The notices are in English: left to right in every language. -->
+        <c:MarkdownView Markdown="{Binding Notices}" SkipTitle="True" FlowDirection="LeftToRight" />
       </StackPanel>
     </Border>
   </StackPanel>

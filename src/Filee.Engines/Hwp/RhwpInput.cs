@@ -1,6 +1,8 @@
 // What Filee changes in an HWPX before rhwp renders it to PDF, in a copy (the user's file is never touched):
 //
 // - Fonts (RhwpFonts): installed fonts for the text's language and characters, no CFF2 variable fonts (#61, #64).
+// - Punctuation widths (RhwpInput.Punctuation): quotes and CJK punctuation in Chinese and Japanese fonts get letter
+//   spacing up to their real width, which rhwp guesses as half a character (#237).
 // - Shape sizes: a box inside a text box stores its size relative to the column (hp:sz widthRelTo="COLUMN", 9920 =
 //   99.2 %); rhwp takes the number as absolute there and drew the exam paper's "보기" boxes 35 mm wide with their
 //   pictures shrunk to a few pixels (#65). The size 한글 laid the object out at (hp:curSz) is written instead.
@@ -13,6 +15,9 @@
 //   below. The same document saved as HWPX by 한글 (no marker) came out right. When the anchor paragraph has no
 //   text, its line is moved up to the paragraph's top (the line minus the table's offset, margins and height):
 //   nothing is drawn on it, and rhwp then puts the table where 한글 does.
+//
+// - Equation lines (#143): in paragraphs without stored lines (Word equations written by Filee) rhwp draws a fraction,
+//   matrix or sum partly below its line, over the next line. Those paragraphs get the overhang as space after them.
 //
 // rhwp's equation fonts are Latin Modern Math, STIX Two and Times New Roman; without the first two or Arial Unicode MS
 // (which Office installs) ∪ ∈ ⊂ ∘ ∼ came out empty, so Cambria Math (part of Windows) is asked for then.
@@ -82,12 +87,26 @@ internal static partial class RhwpInput
                 foreach (var t in xml.Descendants().Where(e => e.Name.LocalName == "t"))
                     if (text.Length < 200_000)
                         text.Append(t.Value);
-            if (ApplyFonts(header, text.ToString(), lookup ?? RhwpFonts.Find))
+            lookup ??= RhwpFonts.Find;
+            if (ApplyFonts(header, text.ToString(), lookup))
                 changed["Contents/header.xml"] = header;
+            if (WidenPunctuation(header, sections.Select(s => s.Xml).ToList(), lookup))
+            {
+                changed["Contents/header.xml"] = header;
+                foreach (var (name, xml) in sections)
+                    changed[name] = xml;
+            }
 
             foreach (var (name, xml) in sections)
+            {
                 if (FixShapeSizes(xml) | NormaliseEquations(xml) | (fromHwp && AnchorTablesInCells(xml)))
                     changed[name] = xml;
+                if (SpaceEquationLines(xml, header))
+                {
+                    changed[name] = xml;
+                    changed["Contents/header.xml"] = header;
+                }
+            }
             if (changed.Count == 0)
                 return null;
 
@@ -109,14 +128,33 @@ internal static partial class RhwpInput
     }
 
     /// <summary>
-    /// Options for <c>rhwp export-pdf</c>: Cambria Math for equations when none of the fonts rhwp draws their symbols
-    /// with is installed.
+    /// Options for <c>rhwp export-pdf</c>: installed generic fallback families (some Linux installations do not have
+    /// rhwp's Korean defaults, which otherwise leaves every missing-font run blank), and Cambria Math for equations
+    /// when none of the fonts rhwp draws their symbols with is installed.
     /// </summary>
     public static IReadOnlyList<string> PdfOptions(Func<string, InstalledFont?>? lookup = null)
     {
         lookup ??= RhwpFonts.Find;
+        var options = new List<string>();
+        AddFallback("--fallback-serif", ["Times New Roman", "Noto Serif", "DejaVu Serif", "Georgia", "Liberation Serif"]);
+        AddFallback("--fallback-sans", ["Segoe UI", "Tahoma", "Arial", "Noto Sans", "DejaVu Sans", "Helvetica", "Liberation Sans"]);
+        AddFallback("--fallback-mono", ["Cascadia Mono", "Consolas", "SF Mono", "Menlo", "Noto Sans Mono", "DejaVu Sans Mono", "Liberation Mono"]);
+
         var hasSymbols = new[] { "Latin Modern Math", "STIX Two Math", "Arial Unicode MS" }.Any(f => lookup(f) is { Usable: true });
-        return !hasSymbols && lookup("Cambria Math") is { Usable: true } ? ["--equation-font", "Cambria Math"] : [];
+        if (!hasSymbols && lookup("Cambria Math") is { Usable: true })
+        {
+            options.Add("--equation-font");
+            options.Add("Cambria Math");
+        }
+        return options;
+
+        void AddFallback(string option, IReadOnlyList<string> families)
+        {
+            if (families.FirstOrDefault(f => lookup(f) is { Usable: true }) is not { } family)
+                return;
+            options.Add(option);
+            options.Add(family);
+        }
     }
 
     private static XDocument Load(ZipArchiveEntry entry)
@@ -197,6 +235,68 @@ internal static partial class RhwpInput
             line.SetAttributeValue("vertpos", top);
             changed = true;
         }
+        return changed;
+    }
+
+    /// <summary>
+    /// Paragraphs without stored lines (written by Filee) that hold equations: room above and below for what rhwp
+    /// draws outside the line. rhwp makes a line as tall as its tallest equation, puts the line's baseline at 85 % of
+    /// that height and the equation's own baseline on it, so an equation whose baseline is higher (a fraction, a matrix,
+    /// a sum with limits) reaches below the line into the next one. The paragraph gets that much more space after it
+    /// (and before it, for an equation reaching above). True when something changed.
+    /// </summary>
+    internal static bool SpaceEquationLines(XDocument section, XDocument header)
+    {
+        const int MinimumOverhang = 100;
+        var paraProperties = header.Descendants().FirstOrDefault(e => e.Name.LocalName == "paraProperties");
+        if (paraProperties is null)
+            return false;
+        var shapes = paraProperties.Elements().Where(e => e.Name.LocalName == "paraPr").ToDictionary(e => (string?)e.Attribute("id") ?? "");
+        var nextId = shapes.Keys.Select(k => int.TryParse(k, out var id) ? id : 0).DefaultIfEmpty(-1).Max() + 1;
+        var spaced = new Dictionary<(string Id, int Before, int After), string>();
+        var changed = false;
+
+        foreach (var paragraph in section.Descendants().Where(e => e.Name.LocalName == "p" && Child(e, "linesegarray") is null))
+        {
+            var boxes = paragraph.Elements().Where(e => e.Name.LocalName == "run").Elements()
+                .Where(e => e.Name.LocalName == "equation" && (string?)Child(e, "pos")?.Attribute("treatAsChar") == "1")
+                .Select(e => (Height: Number(Child(e, "sz"), "height") ?? 0, Baseline: Number(e, "baseLine") ?? 85))
+                .Where(b => b.Height > 0)
+                .ToList();
+            if (boxes.Count == 0)
+                continue;
+            var line = boxes.Max(b => b.Height);
+            var lineBaseline = line * 0.85;
+            var before = (int)Math.Ceiling(boxes.Max(b => Math.Max(0, b.Height * b.Baseline / 100.0 - lineBaseline)));
+            var after = (int)Math.Ceiling(boxes.Max(b => Math.Max(0, lineBaseline - b.Height * b.Baseline / 100.0 + b.Height - line)));
+            // Less than a point (a subscript in running text) stays in the line spacing.
+            before = before < MinimumOverhang ? 0 : before;
+            after = after < MinimumOverhang ? 0 : after;
+            var id = (string?)paragraph.Attribute("paraPrIDRef") ?? "";
+            if ((before == 0 && after == 0) || !shapes.TryGetValue(id, out var shape))
+                continue;
+
+            if (!spaced.TryGetValue((id, before, after), out var newId))
+            {
+                var copy = new XElement(shape);
+                newId = (nextId++).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                copy.SetAttributeValue("id", newId);
+                foreach (var margin in copy.Descendants().Where(e => e.Name.LocalName is "prev" or "next"))
+                {
+                    var extra = margin.Name.LocalName == "prev" ? before : after;
+                    // 한글 writes the margins doubled in hp:default (hp:case holds the real values).
+                    if (margin.Ancestors().Any(a => a.Name.LocalName == "default"))
+                        extra *= 2;
+                    margin.SetAttributeValue("value", (Number(margin, "value") ?? 0) + extra);
+                }
+                paraProperties.Add(copy);
+                spaced[(id, before, after)] = newId;
+            }
+            paragraph.SetAttributeValue("paraPrIDRef", newId);
+            changed = true;
+        }
+        if (changed)
+            paraProperties.SetAttributeValue("itemCnt", paraProperties.Elements().Count(e => e.Name.LocalName == "paraPr"));
         return changed;
     }
 

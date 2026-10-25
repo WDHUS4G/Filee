@@ -50,7 +50,7 @@
                 <DataTemplate x:DataType="vm:RenameRecipeViewModel">
                   <Border Classes="recipe" Padding="10,7" DoubleTapped="OnRecipeDoubleTapped">
                     <DockPanel>
-                      <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding AddCommand}" ToolTip.Tip="{DynamicResource watch.recipe_add}"
+                      <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding AddCommand}" ToolTip.Tip="{DynamicResource watch.recipe_add}" AutomationProperties.Name="{DynamicResource watch.recipe_add}"
                               VerticalAlignment="Center" Margin="6,0,0,0">
                         <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Plus}" />
                       </Button>
@@ -113,10 +113,10 @@
                 <DataTemplate x:DataType="vm:RenameStepViewModel">
                   <StackPanel Spacing="2">
                     <DockPanel>
-                      <Button DockPanel.Dock="Right" Classes="icon" Margin="2,0,0,0" Command="{Binding RemoveCommand}" ToolTip.Tip="{DynamicResource watch.remove_step}">
+                      <Button DockPanel.Dock="Right" Classes="icon" Margin="2,0,0,0" Command="{Binding RemoveCommand}" ToolTip.Tip="{DynamicResource watch.remove_step}" AutomationProperties.Name="{DynamicResource watch.remove_step}">
                         <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
                       </Button>
-                      <Button DockPanel.Dock="Right" Classes="icon" Margin="6,0,0,0" Command="{Binding MoveUpCommand}" ToolTip.Tip="{DynamicResource watch.step_up}">
+                      <Button DockPanel.Dock="Right" Classes="icon" Margin="6,0,0,0" Command="{Binding MoveUpCommand}" ToolTip.Tip="{DynamicResource watch.step_up}" AutomationProperties.Name="{DynamicResource watch.step_up}">
                         <PathIcon Width="12" Height="12" Data="{StaticResource Icon.ChevronRight}" RenderTransform="rotate(-90deg)" />
                       </Button>
                       <!-- What the rule does, then only the boxes that kind needs -->
@@ -124,7 +124,7 @@
                       <Panel>
                         <Grid ColumnDefinitions="*,Auto,*" IsVisible="{Binding ShowArrow}">
                           <TextBox Text="{Binding Find}" PlaceholderText="{Binding FindPlaceholder}" />
-                          <TextBlock Grid.Column="1" Classes="muted" Text="→" Margin="8,0" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="1" Classes="muted" Text="{DynamicResource AppForwardArrow}" Margin="8,0" VerticalAlignment="Center" />
                           <TextBox Grid.Column="2" Text="{Binding Replace}" PlaceholderText="{Binding ReplacePlaceholder}" />
                         </Grid>
                         <TextBox Text="{Binding Find}" PlaceholderText="{Binding FindPlaceholder}" IsVisible="{Binding ShowFindOnly}" />
@@ -153,7 +153,7 @@
                   <DataTemplate x:DataType="vm:RenamePreview">
                     <Grid ColumnDefinitions="*,Auto,*" Margin="0,2">
                       <TextBlock Classes="caption" Text="{Binding Before}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="1" Classes="muted" Text="→" Margin="8,0" />
+                      <TextBlock Grid.Column="1" Classes="muted" Text="{DynamicResource AppForwardArrow}" Margin="8,0" />
                       <TextBlock Grid.Column="2" FontWeight="SemiBold" Text="{Binding After}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                     </Grid>
                   </DataTemplate>
@@ -162,7 +162,7 @@
               <TextBlock Classes="caption" Text="{DynamicResource watch.rename_try}" Margin="0,4,0,0" />
               <Grid ColumnDefinitions="*,Auto,*">
                 <TextBox Text="{Binding CustomName}" PlaceholderText="{DynamicResource watch.rename_try_placeholder}" />
-                <TextBlock Grid.Column="1" Classes="muted" Text="→" Margin="8,0" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Classes="muted" Text="{DynamicResource AppForwardArrow}" Margin="8,0" VerticalAlignment="Center" />
                 <SelectableTextBlock Grid.Column="2" FontWeight="SemiBold" Text="{Binding CustomResult}" VerticalAlignment="Center" TextWrapping="Wrap" />
               </Grid>
             </StackPanel>

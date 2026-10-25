@@ -14,7 +14,7 @@
          parameters of a member is fine (CS1573). -->
     <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
 
-    <Version>1.11.0</Version>
+    <Version>2.1.0</Version>
     <Product>Filee</Product>
     <Authors>Filee contributors</Authors>
     <Copyright>Copyright (c) Filee contributors</Copyright>
@@ -23,4 +23,16 @@
     <FileeRepositoryUrl>https://github.com/KnifeLemon/Filee</FileeRepositoryUrl>
     <RepositoryUrl>$(FileeRepositoryUrl)</RepositoryUrl>
   </PropertyGroup>
+
+  <!-- Libraries their makers sign: ReadyToRun recompiles an assembly and drops its Authenticode signature, so these
+       stay as shipped and keep it (Windows Smart App Control trusts signed code). build/sign-windows.ps1 signs the
+       rest. Run it on a publish folder to see which files are still unsigned when a package is added. -->
+  <ItemGroup>
+    <PublishReadyToRunExclude Include="CommunityToolkit.Mvvm.dll;HarfBuzzSharp.dll;SkiaSharp.dll" />
+    <PublishReadyToRunExclude Include="Magick.NET-Q8-AnyCPU.dll;Magick.NET.Core.dll;PDFtoImage.dll" />
+    <PublishReadyToRunExclude Include="Microsoft.Extensions.DependencyInjection.Abstractions.dll;Microsoft.Extensions.DependencyInjection.dll" />
+    <PublishReadyToRunExclude Include="Microsoft.Extensions.Logging.Abstractions.dll;Microsoft.Extensions.Logging.dll" />
+    <PublishReadyToRunExclude Include="Microsoft.Extensions.Options.dll;Microsoft.Extensions.Primitives.dll" />
+    <PublishReadyToRunExclude Include="Microsoft.IO.RecyclableMemoryStream.dll;Microsoft.Maui.Graphics.dll;System.Security.Cryptography.Pkcs.dll" />
+  </ItemGroup>
 </Project>

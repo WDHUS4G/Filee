@@ -4,6 +4,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Filee.App.Controls;
+using Filee.App.Services;
 using Filee.Core.Formats;
 using Filee.Core.Localization;
 using Filee.Core.Profiles;
@@ -62,7 +63,7 @@ public sealed partial class ExtensionTagsViewModel : ObservableObject
         }
         if (_profile.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
         {
-            InputError = _loc.Format("toolbar.ext_duplicate", "." + extension);
+            InputError = _loc.Format("toolbar.ext_duplicate", LocalizationService.LeftToRight("." + extension));
             return;
         }
         _profile.Extensions.Add(extension);
@@ -116,10 +117,11 @@ public sealed partial class ExtensionTagsViewModel : ObservableObject
         foreach (var group in claimed.GroupBy(c => c.Owner))
         {
             var key = IndexOf(group.Key) < myIndex ? "toolbar.ext_claimed_first" : "toolbar.ext_claimed_later";
-            notes.Add(new ExtensionNote(_loc.Format(key, string.Join(", ", group.Select(c => c.Text)), _loc.DisplayName(group.Key)), true));
+            notes.Add(new ExtensionNote(_loc.Format(key, LocalizationService.LeftToRight(string.Join(", ", group.Select(c => c.Text))),
+                _loc.DisplayName(group.Key)), true));
         }
         if (unknown.Count > 0)
-            notes.Add(new ExtensionNote(_loc.Format("toolbar.ext_unknown", string.Join(", ", unknown)), false));
+            notes.Add(new ExtensionNote(_loc.Format("toolbar.ext_unknown", LocalizationService.LeftToRight(string.Join(", ", unknown))), false));
 
         Tags = chips;
         Notes = notes;

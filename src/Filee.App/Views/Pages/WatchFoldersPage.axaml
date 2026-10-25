@@ -37,10 +37,11 @@
           <Border Classes="card">
             <StackPanel Spacing="12">
               <DockPanel>
-                <Button DockPanel.Dock="Right" Command="{Binding RemoveCommand}" ToolTip.Tip="{DynamicResource watch.remove}">
+                <Button DockPanel.Dock="Right" Command="{Binding RemoveCommand}" ToolTip.Tip="{DynamicResource watch.remove}" AutomationProperties.Name="{DynamicResource watch.remove}">
                   <PathIcon Width="14" Height="14" Data="{StaticResource Icon.Delete}" />
                 </Button>
-                <ToggleSwitch IsChecked="{Binding Enabled}" OnContent="{DynamicResource watch.enabled}" OffContent="{DynamicResource watch.enabled}" />
+                <!-- No label of its own: the status beside it says whether the folder is watched. -->
+                <ToggleSwitch IsChecked="{Binding Enabled}" OnContent="" OffContent="" AutomationProperties.Name="{Binding Folder}" />
                 <TextBlock Classes="muted" VerticalAlignment="Center" Margin="12,0" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
               </DockPanel>
 
@@ -55,12 +56,12 @@
               <Grid ColumnDefinitions="*,16,*">
                 <StackPanel Spacing="4">
                   <TextBlock Classes="label" Text="{DynamicResource watch.preset}" />
-                  <ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding Preset}" HorizontalAlignment="Stretch" />
+                  <ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding Preset}" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource watch.preset}" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" Spacing="4">
                   <TextBlock Classes="label" Text="{DynamicResource watch.originals}" />
                   <ComboBox ItemsSource="{Binding OriginalsChoices}" SelectedItem="{Binding Originals}" HorizontalAlignment="Stretch"
-                            ToolTip.Tip="{DynamicResource watch.originals_hint}" />
+                            ToolTip.Tip="{DynamicResource watch.originals_hint}" AutomationProperties.Name="{DynamicResource watch.originals}" />
                 </StackPanel>
               </Grid>
 
@@ -77,7 +78,7 @@
               <!-- Optional: which files, and how converted files are named. Empty fields change nothing. -->
               <Button Classes="ghost" Command="{Binding ToggleOptionsCommand}" Padding="6,4" HorizontalAlignment="Left">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <PathIcon Classes="chevron" Classes.open="{Binding ShowOptions}" Width="12" Height="12" Data="{StaticResource Icon.ChevronRight}" />
+                  <PathIcon Classes="chevron reading" Classes.open="{Binding ShowOptions}" Width="12" Height="12" Data="{StaticResource Icon.ChevronRight}" />
                   <TextBlock Text="{DynamicResource watch.options}" />
                 </StackPanel>
               </Button>
@@ -138,7 +139,7 @@
                   </DockPanel>
                   <Button Classes="ghost" Command="{Binding ToggleResultFailuresCommand}" Padding="6,4" HorizontalAlignment="Left" IsVisible="{Binding HasResultFailures}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Classes="chevron" Classes.open="{Binding ShowResultFailures}" Width="12" Height="12" Data="{StaticResource Icon.ChevronRight}" />
+                      <PathIcon Classes="chevron reading" Classes.open="{Binding ShowResultFailures}" Width="12" Height="12" Data="{StaticResource Icon.ChevronRight}" />
                       <TextBlock Classes="caption danger" Text="{Binding ResultFailuresLabel}" />
                     </StackPanel>
                   </Button>

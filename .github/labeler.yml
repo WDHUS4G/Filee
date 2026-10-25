@@ -1,0 +1,17 @@
+# Labels .github/workflows/label-pr.yml adds to a new pull request by the files it changes. Only the sure cases: a pull
+# request that changes nothing but these files. The release notes (.github/release.yml) sort pull requests by their
+# labels, so a new format or a fix in the engines is labeled by hand. Every label here must exist in the repository.
+build:
+  - changed-files:
+      - all-globs-to-all-files:
+          - "{build/**,installer/**,.github/**,global.json,Directory.Packages.props}"
+
+documentation:
+  - changed-files:
+      - all-globs-to-all-files:
+          - "{docs/**,**/*.md}"
+
+translation:
+  - changed-files:
+      - all-globs-to-all-files:
+          - src/Filee.App/Assets/i18n/**

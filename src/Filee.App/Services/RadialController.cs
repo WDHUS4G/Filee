@@ -4,9 +4,14 @@
 //   gesture detected → an invisible window waits at the cursor (not activated) → DragEnter brings the file list →
 //   the donut pops out → drop on a slice converts / drop in the hole or release elsewhere closes. Without files
 //   (text, a rubber-band selection) nothing ever shows.
+// Files from a web browser (a picture, a link to a PDF) stand as placeholder paths named like the files will be, so the
+// donut shows their slices at once; they are saved when the conversion starts (WebDrop, ConversionService).
 // Click mode (keyboard shortcut, context menu, drop zone):
 //   files are known up front → donut appears activated → click a slice to convert, right-click to edit,
 //   Esc / click outside closes.
+// The flip key (Tab) and the mouse wheel flip the open donut to its other face (DonutMenu.Flip.cs): in click mode the
+// focused window gets them, in drag mode (no focus during an OS drag) the global hook reports them while the donut
+// shows files.
 // After a drop / click the donut becomes a progress ring at the same spot (DonutMenu.Progress.cs):
 //   finished quickly → ✓ pops up in the centre, then the ring fades out;
 //   still running after HandOffAfter, failed, Esc, click elsewhere or a new gesture → the toast takes over.
@@ -15,11 +20,15 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Threading;
 using Filee.App.Controls;
+using Filee.App.Services.Triggers;
 using Filee.App.ViewModels;
 using Filee.App.Views;
 using Filee.Core.Conversion;
 using Filee.Core.Platform;
+using Filee.Core.Presets;
+using Filee.Core.Profiles;
 using Filee.Core.Settings;
+using Filee.Core.Web;
 using Microsoft.Extensions.Logging;
 
 namespace Filee.App.Services;
@@ -30,6 +39,7 @@ public sealed class RadialController(
     WindowService windows,
     UserDataStore store,
     IPlatformServices platform,
+    TriggerService triggers,
     ILogger<RadialController> log)
 {
     /// <summary>
@@ -46,6 +56,15 @@ public sealed class RadialController(
     private JobViewModel? _lastRingJob;   // for "click the ✓ to open the folder"
     private IDisposable? _handOffTimer;
     private int _dragGeneration;
+    private bool _dragReachedDonut;
+    private bool _fileDragsAccepted;
+    private readonly ActivationGrace _grace = new();
+
+    /// <summary>A gesture over something that isn't a file drag (a rubber-band selection) is common: a line now and then.</summary>
+    private static readonly LogThrottle Throttle = new(TimeSpan.FromMinutes(1));
+    private bool _converted;   // a conversion started from the files on the donut now
+    private readonly HashSet<string> _formatRequestsOffered = new(StringComparer.OrdinalIgnoreCase);
+    private WebDrop? _web;      // the browser drop the click-mode donut's files stand for, until a conversion takes it
 
     /// <summary>
     /// How long a drag that never brought files may keep the invisible window up, in case the button release is
@@ -65,13 +84,18 @@ public sealed class RadialController(
     public void ShowForDrag(int x, int y)
     {
         ReleaseProgressToToast();
+        _grace.Cancel();
+        ReplaceWeb(null);
         var window = EnsureWindow();
         // A ring from an earlier conversion (finished or handed to the toast) must not keep this gesture's window up.
         window.DonutControl.LeaveProgressMode();
         _dropped = false;
+        _dragReachedDonut = false;
+        _converted = false;
         viewModel.ResetForDrag();
         window.DonutControl.AllowContextEdit = false;
         PlaceAndShow(window, x, y, activate: false);
+        WatchFlipKey();
 
         var generation = ++_dragGeneration;
         DispatcherTimer.RunOnce(() =>
@@ -81,18 +105,35 @@ public sealed class RadialController(
         }, EmptyDragLimit);
     }
 
-    /// <summary>Opens the donut for known files (click mode).</summary>
-    public void ShowForFiles(int x, int y, IReadOnlyList<string> files)
+    /// <summary>
+    /// Opens the donut for known files (click mode). Shortcuts among them stand for the files they point to.
+    /// <paramref name="forAnotherProcess"/>: the files came from a later launch or the Services menu, so on macOS the
+    /// donut may lose focus once while Filee becomes the active app. <paramref name="web"/>: the files are placeholders
+    /// of this browser drop (the drop zone), which the donut now owns.
+    /// </summary>
+    public void ShowForFiles(int x, int y, IReadOnlyList<string> files, bool forAnotherProcess = false, WebDrop? web = null)
     {
+        if (web is null)
+            files = platform.ResolveShortcuts(files);
         if (files.Count == 0)
+        {
+            web?.Dispose();
             return;
+        }
         ReleaseProgressToToast();
+        ReplaceWeb(web);
+        if (forAnotherProcess && OperatingSystem.IsMacOS())
+            _grace.Start();
+        else
+            _grace.Cancel();
         var window = EnsureWindow();
         _dropped = false;
+        _converted = false;
         viewModel.Load(files, clickMode: true);
         viewModel.FitToThisDonut();
         window.DonutControl.AllowContextEdit = true;
         PlaceAndShow(window, x, y, activate: true);
+        WatchFlipKey();
         window.DonutControl.PlayOpenAnimation();
     }
 
@@ -101,6 +142,12 @@ public sealed class RadialController(
     {
         if (!_visible || viewModel.IsClickMode)
             return;
+        // No drag ever entered the donut's window: nothing was dragged (a rubber-band selection), or Windows kept
+        // Explorer's drag out (Filee runs as administrator). Tells "the donut didn't react" reports apart.
+        if (!_dragReachedDonut && Throttle.TryEnter("no-drag-enter", out var held))
+            log.LogInformation("Drag gesture ended without a drag entering the donut{Elevation}{Held}",
+                Program.Elevation.ShellCannotReachFilee ? " (Filee runs as administrator: Windows blocks drops from Explorer)" : "",
+                LogThrottle.HeldText(held));
         // Nothing was brought to the donut: the window is invisible but catches clicks, so go right away.
         if (!viewModel.HasFiles && !_window!.DonutControl.IsInProgressMode)
         {
@@ -133,6 +180,9 @@ public sealed class RadialController(
             _window.DonutControl.LeaveProgressMode();
         }
         _visible = false;
+        WatchFlipKey();
+        _grace.Cancel();
+        ReplaceWeb(null);
         var window = _window;
         // A group about to open (its dwell timer running) must not open on a closing donut.
         window.DonutControl.CollapseGroup();
@@ -144,6 +194,22 @@ public sealed class RadialController(
             });
         else
             window.Hide();
+        OfferFormatRequest();
+    }
+
+    /// <summary>
+    /// The donut closed on files Filee can't read at all (".ncm"): offer to request the format, once per extension
+    /// while Filee runs. Files it reads, even mixed with unknown ones, get a conversion and the toast instead.
+    /// </summary>
+    private void OfferFormatRequest()
+    {
+        if (_converted || viewModel.Files.Count == 0 || ProfileSelector.DetectFormats(viewModel.Files).Count > 0)
+            return;
+        var extensions = FormatRequest.UnknownExtensions(viewModel.Files).Where(_formatRequestsOffered.Add).ToList();
+        if (extensions.Count == 0)
+            return;
+        log.LogInformation("Donut closed on files Filee can't read: {Extensions}", FormatRequest.Label(extensions));
+        windows.ShowFormatRequestNotice(extensions);
     }
 
     private RadialWindow EnsureWindow()
@@ -154,20 +220,46 @@ public sealed class RadialController(
         var window = new RadialWindow { DataContext = viewModel };
         var donut = window.DonutControl;
 
+        // On native Wayland, hiding an xdg_toplevel surface causes the compositor to destroy its surface,
+        // and re-showing raises an InvalidOperationException. Track Closed to re-create on the next gesture.
+        if (Filee.Platform.Linux.WaylandSupport.NativeWaylandRequested)
+        {
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_window, window))
+                    _window = null;
+            };
+        }
+
+        window.DragEntered += () => _dragReachedDonut = true;
+        // Tells "the drag reached the donut but brought no files" apart, with what it brought (file promises, say).
+        window.DragWithoutFiles += formats =>
+        {
+            if (Throttle.TryEnter("drag-without-files", out var held))
+                log.LogInformation("A drag without files Filee reads entered the donut; it offered: {Formats}{Held}",
+                    formats, LogThrottle.HeldText(held));
+        };
         window.FilesEntered += files =>
         {
-            if (viewModel.IsClickMode || SameFiles(files, viewModel.Files))
+            if (viewModel.IsClickMode || SameFiles(files, viewModel.Files) || SameWebFiles(files, viewModel.Files))
                 return;
             viewModel.Load(files, clickMode: false);
             donut.PlayOpenAnimation();
+            WatchFlipKey();
         };
-        window.Dropped += (hit, files) =>
+        window.Dropped += (hit, dropped) =>
         {
             _dropped = true;
+            WatchFlipKey();
             if (hit.Kind is DonutHitKind.Segment or DonutHitKind.SubSegment)
-                Convert(hit.Index, hit.Sub, files.Count > 0 ? files : viewModel.Files);
+            {
+                Convert(hit.Index, hit.Sub, dropped.Files.Count > 0 ? dropped.Files : viewModel.Files, dropped.Web);
+            }
             else
+            {
+                dropped.Web?.Dispose();
                 Close();
+            }
         };
         // One line per drag, to tell "the drag never reached the donut" from "it did but nothing lit up" when someone
         // reports a donut that doesn't react.
@@ -177,13 +269,35 @@ public sealed class RadialController(
         window.EscapePressed += () => Close();
         window.Deactivated += (_, _) =>
         {
-            if (viewModel.IsClickMode && !_editing)
-                Close();
+            if (!viewModel.IsClickMode || _editing)
+                return;
+            if (_grace.Forgives())
+            {
+                log.LogInformation("The donut lost focus as it opened for another app's request; it stays open");
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_visible && viewModel.IsClickMode && !window.IsActive)
+                        window.Activate();
+                });
+                return;
+            }
+            Close();
         };
 
         donut.ActiveIndexChanged += (_, index) => viewModel.ShowHint(index, donut.ActiveSubIndex, donut.IsCenterHot);
-        donut.SegmentInvoked += (_, index) => Convert(index, -1, viewModel.Files);
-        donut.SubSegmentInvoked += (_, hit) => Convert(hit.Group, hit.Sub, viewModel.Files);
+        // Drag mode: the flip key and the wheel seen by the global hook (click mode gets them in the focused window).
+        triggers.FlipKeyPressed += (_, _) =>
+        {
+            if (FlipsFromHook)
+                donut.Flip();
+        };
+        triggers.FlipWheelTurned += (_, _) =>
+        {
+            if (FlipsFromHook)
+                donut.FlipFromWheel(Environment.TickCount64);
+        };
+        donut.SegmentInvoked += (_, index) => Convert(index, -1, viewModel.Files, TakeWeb());
+        donut.SubSegmentInvoked += (_, hit) => Convert(hit.Group, hit.Sub, viewModel.Files, TakeWeb());
         donut.CenterInvoked += (_, _) => Close();
         donut.SegmentContextRequested += async (_, index) => await EditPresetAsync(index);
         donut.SubSegmentContextRequested += async (_, hit) => await EditPresetAsync(hit.Group, hit.Sub);
@@ -198,24 +312,88 @@ public sealed class RadialController(
         return window;
     }
 
-    /// <summary>Converts with slice <paramref name="index"/>, or with slice <paramref name="sub"/> of that group's ring.</summary>
-    private void Convert(int index, int sub, IReadOnlyList<string> files)
+    /// <summary>
+    /// Converts with slice <paramref name="index"/>, or with slice <paramref name="sub"/> of that group's ring.
+    /// <paramref name="web"/>: the browser drop the files stand for, handed to the conversion (or disposed).
+    /// </summary>
+    private void Convert(int index, int sub, IReadOnlyList<string> files, WebDrop? web = null)
     {
-        if (viewModel.PresetAt(index, sub) is not { } preset || files.Count == 0)
+        // Placeholders whose drop is gone (the drag listed files it didn't hand over in the end) can't be converted.
+        var orphaned = web is null && files.Any(WebDrop.IsPlaceholder);
+        if (viewModel.PresetAt(index, sub) is not { } preset || SourcesFor(preset, files) is not { Count: > 0 } sources || orphaned)
         {
+            web?.Dispose();
             Close();
             return;
         }
 
-        log.LogInformation("Converting {Count} file(s) with preset {Preset}", files.Count, preset.Id);
-        var job = conversions.Start(files, preset, showInToast: false);
+        if (preset.IsTool)
+        {
+            var near = _window?.Position;
+            Close(animate: false);
+            if (web is null)
+                windows.ShowTool(sources, preset, near);
+            else
+                _ = ShowToolForBrowserFilesAsync(web, preset, near);
+            return;
+        }
+
+        // Merged PDFs, joined clips and slideshows follow the order the user picks.
+        if ((preset.TargetFormat == "pdf" && preset.Pdf.MergeIntoSingle || preset.JoinsIntoOneMedia) && sources.Count > 1)
+        {
+            Close(animate: false);
+            _ = MergeInOrderAsync(sources, preset.Clone(), web);
+            return;
+        }
+
+        log.LogInformation("Converting {Count} file(s) with preset {Preset}{Web}", sources.Count, preset.Id,
+            web is null ? "" : " (from a browser)");
+        var job = conversions.Start(sources, preset, showInToast: false, web);
         if (job is null || _window is null)
         {
             Close();
             return;
         }
+        _converted = true;
         ShowProgress(job);
     }
+
+    private async Task MergeInOrderAsync(IReadOnlyList<string> files, Preset preset, WebDrop? web)
+    {
+        try
+        {
+            var ordered = await windows.ChooseMergeOrderAsync(files);
+            if (ordered is not null)
+            {
+                conversions.Start(ordered, preset, web: web);
+                web = null; // the conversion owns the browser drop now
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            log.LogError(ex, "Could not start the ordered PDF merge");
+        }
+        finally
+        {
+            web?.Dispose();
+        }
+    }
+
+    /// <summary>A tool (crop, clip) on files from a browser: they are saved first, then it opens on them.</summary>
+    private async Task ShowToolForBrowserFilesAsync(WebDrop web, Filee.Core.Presets.Preset preset, PixelPoint? near)
+    {
+        var files = await conversions.SaveBrowserFilesAsync(web, (placeholder, ex) =>
+            log.LogWarning(ex, "Saving {File} from a browser for {Preset} failed", Path.GetFileName(placeholder), preset.Id));
+        if (files.Count > 0)
+            windows.ShowTool(files, preset, near);
+    }
+
+    /// <summary>
+    /// What <paramref name="preset"/> converts of <paramref name="files"/>: folders only go into "Compress into one
+    /// archive"; any other preset converts the files beside them (issue #186).
+    /// </summary>
+    internal static IReadOnlyList<string> SourcesFor(Preset preset, IReadOnlyList<string> files) =>
+        preset.PacksIntoOneArchive ? files : [.. files.Where(path => !Directory.Exists(path))];
 
     // ───────── Progress ring ─────────
 
@@ -224,6 +402,7 @@ public sealed class RadialController(
         var donut = _window!.DonutControl;
         _dropped = true;
         _progressJob = job;
+        viewModel.ProgressJob = job;
         _lastRingJob = job;
         donut.BeginProgress();
         donut.SetProgress(job.Progress / 100);
@@ -281,11 +460,13 @@ public sealed class RadialController(
         if (_progressJob is not null)
             _progressJob.PropertyChanged -= OnProgressJobChanged;
         _progressJob = null;
+        viewModel.ProgressJob = null;
     }
 
     private void HideWindow()
     {
         _visible = false;
+        WatchFlipKey();
         _window?.DonutControl.CollapseGroup();
         _window?.Hide();
     }
@@ -301,7 +482,7 @@ public sealed class RadialController(
             if (await windows.EditPresetAsync(preset, _window))
             {
                 store.SaveLibrary();
-                viewModel.Load(viewModel.Files, viewModel.IsClickMode);
+                viewModel.Load(viewModel.Files, viewModel.IsClickMode, viewModel.IsBackFace);
             }
         }
         finally
@@ -311,6 +492,21 @@ public sealed class RadialController(
         if (_visible)
             _window.Activate();
     }
+
+    /// <summary>
+    /// Has the global hook report the flip key and the wheel only while a drag-mode donut shows files that could flip;
+    /// they are left alone otherwise (see <see cref="TriggerService.WatchFlipKey"/>).
+    /// </summary>
+    private void WatchFlipKey()
+    {
+        triggers.WatchFlipKey = FlipsFromHook;
+        // One source per press: the hook in drag mode, the window in click mode (#504).
+        if (_window is not null)
+            _window.DonutControl.FlipKeyFromHook = FlipsFromHook;
+    }
+
+    /// <summary>A drag-mode donut shows files and nothing was dropped yet: the hook's flip key and wheel flip it.</summary>
+    private bool FlipsFromHook => _visible && !_dropped && !viewModel.IsClickMode && viewModel.HasFiles;
 
     /// <summary>
     /// Top-left corner of a <paramref name="sidePx"/> square window centred on <paramref name="cursor"/>, moved into
@@ -347,7 +543,14 @@ public sealed class RadialController(
         // below normal windows while it keeps the mark (after the Photos app opened, for one). Then Explorer stays on
         // top of the donut and the drop never reaches it, so put it back on top every time.
         if (window.TryGetPlatformHandle()?.Handle is { } handle)
+        {
             platform.RaiseTopmost(handle);
+            if (!_fileDragsAccepted && OperatingSystem.IsMacOS() && platform is Filee.Platform.MacOS.MacOSPlatformServices mac)
+            {
+                mac.AcceptFileDrags(handle);
+                _fileDragsAccepted = true;
+            }
+        }
         _visible = true;
         if (activate)
             window.Activate();
@@ -355,4 +558,25 @@ public sealed class RadialController(
 
     private static bool SameFiles(IReadOnlyList<string> a, IReadOnlyList<string> b) =>
         a.Count == b.Count && a.SequenceEqual(b, FileSystemPaths.Comparer);
+
+    /// <summary>The same browser files dragged in again: each entry makes new placeholders, with the same names.</summary>
+    private static bool SameWebFiles(IReadOnlyList<string> a, IReadOnlyList<string> b) =>
+        a.Count == b.Count && a.All(WebDrop.IsPlaceholder) && b.All(WebDrop.IsPlaceholder)
+        && a.Select(Path.GetFileName).SequenceEqual(b.Select(Path.GetFileName), StringComparer.Ordinal);
+
+    /// <summary>Hands the click-mode donut's browser drop to a conversion.</summary>
+    private WebDrop? TakeWeb()
+    {
+        var web = _web;
+        _web = null;
+        return web;
+    }
+
+    /// <summary>The click-mode donut now stands for <paramref name="web"/>'s files (or local ones): the old drop is done.</summary>
+    private void ReplaceWeb(WebDrop? web)
+    {
+        if (!ReferenceEquals(_web, web))
+            _web?.Dispose();
+        _web = web;
+    }
 }

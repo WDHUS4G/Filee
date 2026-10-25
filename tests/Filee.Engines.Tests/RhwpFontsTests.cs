@@ -121,6 +121,25 @@ public class RhwpFontsTests(EngineFixture fx) : IClassFixture<EngineFixture>
         Assert.Null(RhwpInput.Prepare(hwpx, dir, _ => new InstalledFont(true, _ => true))); // nothing to replace: no copy
     }
 
+    [Fact]
+    public void Looking_up_a_missing_font_leaves_the_fallback_typeface_usable_for_others()
+    {
+        // fontconfig (and CoreText) answer an unknown family with some installed font; Windows answers null.
+        const string missing = "Filee No Such Family";
+        var fallback = SkiaSharp.SKFontManager.Default.MatchFamily(missing);
+        Assert.SkipWhen(fallback is null, "this font manager has no fallback for unknown families");
+        // SkiaSharp gives out one wrapper per native typeface: what Find gets is this very object.
+        Assert.SkipUnless(ReferenceEquals(fallback, SkiaSharp.SKFontManager.Default.MatchFamily(missing)),
+            "this font manager makes a new typeface per lookup");
+
+        RhwpFonts.ReleaseCache();
+        RhwpFonts.Find(missing);
+
+        Assert.NotEqual(IntPtr.Zero, fallback.Handle);
+        Assert.True(fallback.GlyphCount > 0);
+        GC.KeepAlive(fallback);
+    }
+
     private static List<string> Faces(string hwpx)
     {
         using var zip = ZipFile.OpenRead(hwpx);

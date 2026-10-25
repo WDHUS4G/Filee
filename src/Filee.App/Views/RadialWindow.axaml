@@ -9,7 +9,7 @@
         xmlns:vm="using:Filee.App.ViewModels"
         x:Class="Filee.App.Views.RadialWindow"
         x:DataType="vm:RadialViewModel"
-        Title="Filee"
+        Title="Filee Donut"
         WindowDecorations="None"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
@@ -18,6 +18,26 @@
         ShowActivated="False"
         CanResize="False"
         SizeToContent="WidthAndHeight">
+  <Window.Styles>
+    <!-- The download badge pops up above the progress ring and pops away once the files are saved. -->
+    <Style Selector="Border.download-badge">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="RenderTransform" Value="scale(0.6)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.22" Easing="BackEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border.download-badge.shown">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="RenderTransform" Value="scale(1)" />
+    </Style>
+    <Style Selector="Window.reduced-motion Border.download-badge">
+      <Setter Property="Transitions" Value="{x:Null}" />
+    </Style>
+  </Window.Styles>
   <Panel x:Name="Root" Background="{Binding HitBackground}" DragDrop.AllowDrop="True">
     <c:DonutMenu x:Name="Donut"
                  Opacity="{Binding DonutOpacity}"
@@ -27,6 +47,20 @@
                  OuterRadius="{Binding OuterRadius}"
                  HoleRatio="{Binding HoleRatio}"
                  SliceOpacity="{Binding SliceOpacity}"
-                 ReserveSubRing="{Binding ReserveSubRing}" />
+                 ReserveSubRing="{Binding ReserveSubRing}"
+                 CanFlip="{Binding CanFlip}"
+                 CenterHint="{Binding FlipHint}"
+                 CenterHintWheel="{Binding FlipHintWheel}"
+                 FlipKey="{Binding FlipKey}"
+                 FlipWithWheel="{Binding FlipWithWheel}" />
+    <!-- Centred on the donut and lifted just above the ring (DonutMenu.RingRadius 36, its stroke and plate). -->
+    <Panel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
+           RenderTransform="translate(0px, -70px)">
+      <Border x:Name="DownloadBadge" Classes="download-badge" Classes.shown="{Binding ProgressJob.IsDownloading, FallbackValue=False}"
+              Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
+              CornerRadius="{DynamicResource SoftRadius}" Padding="10,4" RenderTransformOrigin="50%,100%">
+        <TextBlock Text="{Binding ProgressJob.DownloadText, FallbackValue=''}" FontSize="12" FontWeight="SemiBold" />
+      </Border>
+    </Panel>
   </Panel>
 </Window>

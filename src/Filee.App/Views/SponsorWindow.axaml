@@ -39,7 +39,7 @@
                       Background="{Binding Color}">
                 <PathIcon Width="19" Height="19" Data="{Binding Icon}" Foreground="White" />
               </Border>
-              <PathIcon DockPanel.Dock="Right" Width="12" Height="12" Opacity="0.55"
+              <PathIcon DockPanel.Dock="Right" Classes="reading" Width="12" Height="12" Opacity="0.55"
                         Data="{StaticResource Icon.ChevronRight}" VerticalAlignment="Center" />
               <StackPanel VerticalAlignment="Center" Spacing="1">
                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />

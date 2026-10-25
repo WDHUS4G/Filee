@@ -358,8 +358,4 @@ public sealed class EngineDownloadService
             return false;
         }
     }
-
-    /// <summary>The first not-installed package whose engines would make <paramref name="possible"/> true, if any.</summary>
-    public EnginePackageState? PackageEnabling(Func<RoutePlanner, bool> possible) =>
-        Packages.FirstOrDefault(p => !p.IsInstalled && possible(_catalog.CreatePlanner(p.Package.ConverterIds)));
 }

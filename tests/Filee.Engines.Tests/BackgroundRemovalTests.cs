@@ -238,6 +238,166 @@ public class BackgroundRemovalTests(EngineFixture fx) : IClassFixture<EngineFixt
         Assert.Equal(255, Pixel(high, 85, 30).A);
     }
 
+    /// <summary>
+    /// A drawing on a teal backdrop (issue #139): black-outlined panels in steel blue, a light blue-grey "window",
+    /// red, white and light grey, and a white disc with no outline.
+    /// </summary>
+    private static MagickImage Drawing()
+    {
+        var image = new MagickImage(new MagickColor(Teal), 240, 160);
+        new Drawables().StrokeColor(MagickColors.Black).StrokeWidth(3)
+            .FillColor(new MagickColor(SteelBlue)).Rectangle(20, 20, 110, 80)
+            .FillColor(new MagickColor(Window)).Rectangle(30, 30, 70, 70)
+            .FillColor(new MagickColor(Red)).Rectangle(130, 20, 220, 80)
+            .FillColor(new MagickColor(White)).Rectangle(20, 100, 60, 140)
+            .FillColor(new MagickColor(LightGrey)).Rectangle(70, 100, 110, 140)
+            .Draw(image);
+        new Drawables().FillColor(new MagickColor(White)).Circle(170, 120, 170, 145).Draw(image);
+        return image;
+    }
+
+    private const string Teal = "#1AA59A", SteelBlue = "#3E667F", Window = "#90A2A6", Red = "#F04F47",
+        White = "#F5F5F5", LightGrey = "#D2D2D2";
+
+    /// <summary>A point inside each colour of <see cref="Drawing"/>.</summary>
+    public static TheoryData<int, int, string> DrawingColours => new()
+    {
+        { 90, 50, SteelBlue }, { 50, 50, Window }, { 175, 50, Red }, { 40, 120, White }, { 90, 120, LightGrey },
+        { 170, 120, White },
+    };
+
+    private static void AssertKept(IMagickImage<byte> image, int x, int y, string colour)
+    {
+        var expected = new MagickColor(colour);
+        var pixel = Pixel(image, x, y);
+        Assert.True(pixel.A == 255
+            && Math.Abs(pixel.R - expected.R) <= 6 && Math.Abs(pixel.G - expected.G) <= 6 && Math.Abs(pixel.B - expected.B) <= 6,
+            $"({x}, {y}): {pixel} instead of {colour}");
+    }
+
+    [Theory]
+    [MemberData(nameof(DrawingColours))]
+    public void A_drawing_on_a_coloured_backdrop_keeps_its_colours(int x, int y, string colour)
+    {
+        // Every colour of the drawing was taken for ink over teal: un-mixed, the blue body became half transparent
+        // magenta and the white and grey parts pink.
+        using var image = Removed(Drawing());
+
+        AssertKept(image, x, y, colour);
+        Assert.Equal(0, Pixel(image, 5, 5).A);
+        Assert.Equal(0, Pixel(image, 125, 150).A);
+    }
+
+    [Fact]
+    public void Edges_on_a_coloured_backdrop_lose_the_backdrop_without_turning_red()
+    {
+        using var image = Removed(Drawing());
+
+        // The anti-aliased rim of the white disc and of the black outlines.
+        var visible = 0;
+        for (var y = 90; y < 160; y++)
+        {
+            for (var x = 120; x < 240; x++)
+            {
+                var pixel = Pixel(image, x, y);
+                if (pixel.A == 0)
+                    continue;
+                visible++;
+                Assert.True(pixel.R >= 240 && pixel.G >= 240 && pixel.B >= 240, $"disc ({x}, {y}): {pixel}");
+            }
+        }
+        Assert.True(visible > 1500, visible.ToString());
+        for (var x = 125; x < 225; x++)
+        {
+            var pixel = Pixel(image, x, 18); // above the red panel's outline
+            if (pixel.A > 0)
+                Assert.True(pixel.R < 64 && pixel.G < 64 && pixel.B < 64, $"outline ({x}, 18): {pixel}");
+        }
+    }
+
+    [Theory]
+    [InlineData("#BFE3DA")] // mint
+    [InlineData("#F2D7A6")] // sand
+    public void A_white_logo_with_a_shadow_stays_white(string backdrop)
+    {
+        // A white label with heavy black lettering and a drop shadow in a darker shade of the backdrop. The black set
+        // the ink opacity, and the white was un-mixed to half transparent white.
+        var shade = new MagickColor(backdrop);
+        shade = new MagickColor((byte)(shade.R * 6 / 10), (byte)(shade.G * 6 / 10), (byte)(shade.B * 6 / 10));
+        using var image = new MagickImage(new MagickColor(backdrop), 240, 160);
+        new Drawables()
+            .FillColor(shade).Rectangle(48, 48, 208, 128)
+            .FillColor(MagickColors.White).Rectangle(40, 40, 200, 120)
+            .FillColor(MagickColors.Black).Rectangle(60, 60, 180, 100)
+            .Draw(image);
+
+        Removed(image);
+
+        AssertKept(image, 120, 50, "#FFFFFF");
+        AssertKept(image, 50, 110, "#FFFFFF");
+        AssertKept(image, 120, 80, "#000000");
+        Assert.Equal(0, Pixel(image, 5, 5).A);
+        var shadow = Pixel(image, 204, 100);
+        Assert.True(shadow.A > 0 && Math.Max(shadow.R, Math.Max(shadow.G, shadow.B)) < 160, $"shadow: {shadow}");
+    }
+
+    [Fact]
+    public async Task A_palette_png_drawing_keeps_its_colours_with_the_built_in_preset()
+    {
+        var dir = fx.NewFolder();
+        var source = Path.Combine(dir, "drawing.png");
+        using (var image = Drawing())
+            image.Write(source, MagickFormat.Png8);
+        using (var written = new MagickImage(source))
+            Assert.Equal(ColorType.Palette, written.ColorType);
+        var preset = BuiltInData.CreatePresets().Single(p => p.Id == "remove-background");
+
+        var job = await fx.ConvertAsync([source], preset);
+
+        Assert.Equal(JobState.Completed, job.State);
+        using var result = new MagickImage(job.Outputs.Single());
+        Assert.Equal(0, Pixel(result, 5, 5).A);
+        // Png8 quantises the drawing: compare with the palette colours that were written, not the drawn ones.
+        using var palette = new MagickImage(source);
+        foreach (var (x, y) in new[] { (90, 50), (50, 50), (175, 50), (40, 120), (90, 120), (170, 120) })
+            AssertKept(result, x, y, Pixel(palette, x, y).ToHexString()[..7]);
+    }
+
+    [Fact]
+    public async Task A_gray_and_alpha_png_keeps_its_light_grey_with_the_built_in_preset()
+    {
+        // Grey + alpha PNG: a light grey label with a large black block on a mid grey backdrop, one corner already
+        // transparent. The label was un-mixed to half transparent white.
+        var dir = fx.NewFolder();
+        var source = Path.Combine(dir, "gray.png");
+        using (var image = new MagickImage(new MagickColor("#808080"), 200, 140))
+        {
+            new Drawables().StrokeColor(MagickColors.Black).StrokeWidth(4).FillColor(new MagickColor("#F0F0F0"))
+                .Rectangle(40, 30, 160, 110)
+                .StrokeColor(MagickColors.Transparent).FillColor(MagickColors.Black).Rectangle(50, 50, 150, 90)
+                .Draw(image);
+            image.Alpha(AlphaOption.Set);
+            using (var pixels = image.GetPixels())
+                for (var y = 0; y < 20; y++)
+                    for (var x = 170; x < 200; x++)
+                        pixels.SetPixel(x, y, [0, 0, 0, 0]);
+            image.ColorType = ColorType.GrayscaleAlpha;
+            image.Write(source, MagickFormat.Png);
+        }
+        using (var written = new MagickImage(source))
+            Assert.Equal(ColorType.GrayscaleAlpha, written.ColorType);
+        var preset = BuiltInData.CreatePresets().Single(p => p.Id == "remove-background");
+
+        var job = await fx.ConvertAsync([source], preset);
+
+        Assert.Equal(JobState.Completed, job.State);
+        using var result = new MagickImage(job.Outputs.Single());
+        Assert.Equal(0, Pixel(result, 5, 5).A);
+        Assert.Equal(0, Pixel(result, 185, 10).A);
+        AssertKept(result, 100, 40, "#F0F0F0");
+        AssertKept(result, 100, 70, "#000000");
+    }
+
     [Fact]
     public async Task Jpg_signature_becomes_a_transparent_png_with_the_built_in_preset()
     {

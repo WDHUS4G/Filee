@@ -357,6 +357,15 @@ public class CadTests(EngineFixture fx) : IClassFixture<EngineFixture>
         Assert.Contains(runs, r => r.Text.Contains('A') && r.Typeface.ContainsGlyph('A'));
     }
 
+    [Fact]
+    public void Text_measures_the_same_after_the_idle_app_released_the_caches()
+    {
+        var before = CadFonts.Layout("도면 ABC", CadFonts.Resolve(null, false, false)).Select(r => (r.Text, r.Advance)).ToList();
+        Filee.Engines.Infrastructure.EngineCaches.Release();
+        var after = CadFonts.Layout("도면 ABC", CadFonts.Resolve(null, false, false)).Select(r => (r.Text, r.Advance)).ToList();
+        Assert.Equal(before, after);
+    }
+
     // ───────────────────────── Helpers ─────────────────────────
 
     private static IEnumerable<OpCodeName> Operators(CSequence sequence)

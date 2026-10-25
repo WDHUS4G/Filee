@@ -21,7 +21,45 @@ public sealed class LinuxPlatformServices : IPlatformServices
         string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)
         || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
 
-    public bool SupportsGlobalPointerGestures => X11WindowSystem.IsAvailable;
+    public static bool IsGnomeWaylandSession => IsWaylandSession
+        && (Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP") ?? "").Split(':')
+            .Contains("GNOME", StringComparer.OrdinalIgnoreCase);
+
+    // Enabling the Shell extension opts in; no /dev/input permission or environment setup is needed on GNOME.
+    // Keep KDE's existing libinput opt-in independent. A value of 0 explicitly disables the GNOME bridge too.
+    public static bool UsesGnomePointerBridge => IsGnomeWaylandSession
+        && Environment.GetEnvironmentVariable("FILEE_WAYLAND_GESTURES") != "0";
+
+    public string? GnomePointerProcess { get; set; }
+    public bool GnomePointerIsDesktop { get; set; }
+
+    // Wayland gestures (experimental) are opt-in: FILEE_WAYLAND_GESTURES=1 on KDE Plasma and Hyprland.
+    // libuiohook's libinput backend reads /dev/input, so /dev/input is only probed once the switch is set,
+    // and it works once the user is in the `input` group. Presses carry no position and a mouse only moves
+    // relatively there; a KWin script or Hyprland window rule places the donut at the cursor.
+    private static readonly bool WaylandGestures = IsWaylandSession
+        && Environment.GetEnvironmentVariable("FILEE_WAYLAND_GESTURES") == "1"
+        && WaylandSupport.IsSupportedCompositor(
+            Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP"),
+            Environment.GetEnvironmentVariable("HYPRLAND_INSTANCE_SIGNATURE"))
+        && CanReadInputDevices();
+
+    private static bool CanReadInputDevices()
+    {
+        try
+        {
+            foreach (var device in Directory.EnumerateFiles("/dev/input", "event*"))
+            {
+                try { using var _ = File.OpenRead(device); return true; }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { }
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { }
+        return false;
+    }
+
+    public bool SupportsGlobalPointerGestures => X11WindowSystem.IsAvailable || WaylandGestures || UsesGnomePointerBridge;
+    public bool PressCarriesPosition => !WaylandGestures;
     public bool SupportsSelectionShortcut => false;
     public string SelectionShortcutUnavailableReason =>
         "Linux file managers do not expose a shared selected-file API. Use the Filee context action or its Thunar shortcut.";
@@ -31,8 +69,15 @@ public sealed class LinuxPlatformServices : IPlatformServices
     public string ThunarShortcutRestartRequired =>
         "Close Thunar before changing its shortcut, then reopen it to load the Filee action and shortcut.";
 
-    public bool IsFileManagerAt(int x, int y) => ProcessNameAt(x, y) is { } name && FileManagers.Contains(name);
-    public string? ProcessNameAt(int x, int y) => X11WindowSystem.ProcessNameAt(x, y);
+    // Wayland can't say which window is under the cursor, so any Ctrl+drag may open the (invisible) donut window;
+    // it only shows when files are dragged in, and excluded apps can't be told apart there either.
+    public TrashRefusal? MoveToTrash(string path) => FreedesktopTrash.Move(path, Path.Combine(XdgDirectory("XDG_DATA_HOME", ".local/share"), "Trash"));
+
+    public bool IsFileManagerAt(int x, int y) =>
+        UsesGnomePointerBridge && GnomePointerIsDesktop
+        || WaylandGestures || ProcessNameAt(x, y) is { } name && FileManagers.Contains(name);
+    public string? ProcessNameAt(int x, int y) => UsesGnomePointerBridge
+        ? GnomePointerProcess : X11WindowSystem.ProcessNameAt(x, y);
 
     public IReadOnlyList<string> RunningAppNames() => IPlatformServices.AppNames(X11WindowSystem.ClientProcessNames());
     public IReadOnlyList<string> GetFileManagerSelection() => throw new NotSupportedException(SelectionShortcutUnavailableReason);
@@ -75,7 +120,37 @@ public sealed class LinuxPlatformServices : IPlatformServices
         using var process = Process.Start(opener) ?? throw new InvalidOperationException("Could not start xdg-open.");
     }
 
+    /// <summary>
+    /// Through xdg-open, never by starting the file itself: Process.Start with UseShellExecute would run a file that
+    /// has the executable bit.
+    /// </summary>
+    public void OpenFile(string path)
+    {
+        var opener = new ProcessStartInfo("xdg-open") { UseShellExecute = false };
+        opener.ArgumentList.Add(Path.GetFullPath(path));
+        using var process = Process.Start(opener) ?? throw new InvalidOperationException("Could not start xdg-open.");
+    }
+
     public void RaiseTopmost(nint windowHandle) => X11WindowSystem.RaiseTopmost(windowHandle);
+
+    /// <summary>XDG_DOWNLOAD_DIR from user-dirs.dirs (a localized desktop calls it "다운로드"), else ~/Downloads.</summary>
+    public string DownloadsFolder
+    {
+        get
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var file = Path.Combine(XdgDirectory("XDG_CONFIG_HOME", ".config"), "user-dirs.dirs");
+            try
+            {
+                if (File.Exists(file) && XdgUserDirs.Download(File.ReadAllText(file), home) is { } configured)
+                    return configured;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+            return Path.Combine(home, "Downloads");
+        }
+    }
 
     private static string XdgDirectory(string variable, string fallback)
     {

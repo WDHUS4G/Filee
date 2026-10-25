@@ -18,19 +18,23 @@
       <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource engines.lo_description}" />
     </StackPanel>
     <StackPanel Spacing="2">
-      <ToggleSwitch IsChecked="{Binding LibreOfficeForSlides}" OnContent="{DynamicResource engines.lo_slides}" OffContent="{DynamicResource engines.lo_slides}" />
+      <ToggleSwitch IsChecked="{Binding LibreOfficeForSlides}" OnContent="{DynamicResource engines.lo_slides}" OffContent="{DynamicResource engines.lo_slides}"
+                    AutomationProperties.Name="{DynamicResource engines.lo_slides}" />
       <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource engines.lo_slides_hint}" />
     </StackPanel>
     <StackPanel Spacing="2">
-      <ToggleSwitch IsChecked="{Binding LibreOfficeForDocuments}" OnContent="{DynamicResource engines.lo_documents}" OffContent="{DynamicResource engines.lo_documents}" />
+      <ToggleSwitch IsChecked="{Binding LibreOfficeForDocuments}" OnContent="{DynamicResource engines.lo_documents}" OffContent="{DynamicResource engines.lo_documents}"
+                    AutomationProperties.Name="{DynamicResource engines.lo_documents}" />
       <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource engines.lo_documents_hint}" />
     </StackPanel>
     <StackPanel Spacing="2">
-      <ToggleSwitch IsChecked="{Binding LibreOfficeForSheets}" OnContent="{DynamicResource engines.lo_sheets}" OffContent="{DynamicResource engines.lo_sheets}" />
+      <ToggleSwitch IsChecked="{Binding LibreOfficeForSheets}" OnContent="{DynamicResource engines.lo_sheets}" OffContent="{DynamicResource engines.lo_sheets}"
+                    AutomationProperties.Name="{DynamicResource engines.lo_sheets}" />
       <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource engines.lo_sheets_hint}" />
     </StackPanel>
     <StackPanel Spacing="2">
-      <ToggleSwitch IsChecked="{Binding LibreOfficeForHwp}" OnContent="{DynamicResource engines.lo_hwp}" OffContent="{DynamicResource engines.lo_hwp}" />
+      <ToggleSwitch IsChecked="{Binding LibreOfficeForHwp}" OnContent="{DynamicResource engines.lo_hwp}" OffContent="{DynamicResource engines.lo_hwp}"
+                    AutomationProperties.Name="{DynamicResource engines.lo_hwp}" />
       <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource engines.lo_hwp_hint}" />
     </StackPanel>
     <Button Classes="accent" HorizontalAlignment="Right" Margin="0,6,0,0" MinWidth="88" HorizontalContentAlignment="Center"

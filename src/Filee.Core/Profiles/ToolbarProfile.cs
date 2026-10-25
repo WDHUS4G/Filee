@@ -36,6 +36,14 @@ public sealed class ToolbarProfile
     /// <summary>Preset ids in donut order, clockwise starting at 12 o'clock.</summary>
     public List<string> PresetIds { get; set; } = [];
 
+    /// <summary>
+    /// Preset ids of the back face, which Tab flips the open donut to: less common conversions and tools, in the same
+    /// order and up to the same <see cref="MaxSlices"/> as <see cref="PresetIds"/>. Empty: the donut doesn't flip.
+    /// Null only as read from a file without back faces (a Filee from before settings schema 30, or one that saved
+    /// the library since): loading gives a built-in donut its default back face then, and any other none.
+    /// </summary>
+    public List<string>? BackPresetIds { get; set; }
+
     /// <summary>Returns true if the extension (with or without dot) belongs to this profile.</summary>
     public bool Matches(string extension) =>
         Extensions.Contains(extension.TrimStart('.'), StringComparer.OrdinalIgnoreCase);
@@ -48,6 +56,7 @@ public sealed class ToolbarProfile
         Extensions = [.. Extensions],
         IsFallback = IsFallback,
         PresetIds = [.. PresetIds],
+        BackPresetIds = BackPresetIds is null ? null : [.. BackPresetIds],
     };
 }
 

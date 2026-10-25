@@ -32,7 +32,7 @@ internal static class ZippedText
         var text = MainFile(folder, "index.txt", ".txt", ".md", ".markdown", ".text")
                    ?? throw new InvalidDataException("The TXTZ file contains no text file.");
         // calibre writes TXTZ text as plain text, Markdown or Textile; Markdown reads all of them sensibly.
-        var document = MarkdownReader.Read(HwpxConverter.DecodeText(File.ReadAllBytes(text)), Path.GetDirectoryName(text)!);
+        var document = MarkdownReader.Read(HwpxConverter.DecodeText(File.ReadAllBytes(text)), Path.GetDirectoryName(text)!, folder);
         var metadata = Metadata(folder);
         document.Title = metadata.Title ?? document.Title;
         return new Book(document, metadata);

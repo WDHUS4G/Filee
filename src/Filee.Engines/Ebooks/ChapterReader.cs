@@ -29,6 +29,7 @@ internal static class ChapterReader
             {
                 BaseFolder = Path.GetDirectoryName(chapter)!,
                 MediaFolder = mediaFolder,
+                ResourceRoot = Path.GetDirectoryName(mediaFolder)!,
                 MapId = id => Anchor(number, id),
                 MapLink = href => Link(href, chapter, number, index),
             });

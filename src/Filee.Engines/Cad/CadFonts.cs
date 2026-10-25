@@ -62,6 +62,21 @@ internal static class CadFonts
     [ThreadStatic]
     private static Dictionary<SKTypeface, SKFont>? _measuringFonts;
 
+    // Bumped by ReleaseCache: each thread drops its measuring fonts the next time it measures (only it may touch them).
+    private static int _generation;
+    [ThreadStatic]
+    private static int _measuringGeneration;
+
+    /// <summary>Forgets the typefaces looked up so far (<see cref="Infrastructure.EngineCaches.Release"/>).</summary>
+    internal static void ReleaseCache()
+    {
+        Interlocked.Increment(ref _generation);
+        Families.Clear();
+        Fallbacks.Clear();
+        Defaults.Clear();
+        FontMetrics.Clear();
+    }
+
     /// <summary>
     /// The typeface for a text style: its TrueType family if installed (family name or font file), else the
     /// default sans-serif typeface. Never null.
@@ -140,6 +155,14 @@ internal static class CadFonts
     /// </summary>
     private static SKFont MeasuringFont(SKTypeface typeface)
     {
+        var generation = Volatile.Read(ref _generation);
+        if (_measuringFonts is not null && _measuringGeneration != generation)
+        {
+            foreach (var old in _measuringFonts.Values)
+                old.Dispose();
+            _measuringFonts = null;
+        }
+        _measuringGeneration = generation;
         _measuringFonts ??= [];
         if (!_measuringFonts.TryGetValue(typeface, out var font))
             _measuringFonts[typeface] = font = CreateFont(typeface, MeasureSize);

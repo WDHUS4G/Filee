@@ -5,6 +5,7 @@
 
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Filee.Engines.Office.Ooxml;
 
@@ -46,18 +47,50 @@ internal sealed class XlsxReader
         if (_package.TargetOfType(workbookPath, "/styles") is { } styles)
             ReadStyles(_package.Part(styles), colors);
 
+        // Print titles are a defined name per sheet, by the sheet's position (hidden sheets count).
+        var titles = new Dictionary<int, (int, int)>();
+        foreach (var name in workbook.Element(S + "definedNames")?.Elements(S + "definedName") ?? [])
+        {
+            if ((string?)name.Attribute("name") == "_xlnm.Print_Titles" && int.TryParse((string?)name.Attribute("localSheetId"), out var id)
+                && PrintTitleRows(name.Value) is { } rows)
+                titles[id] = rows;
+        }
+
         var result = new Workbook();
+        var index = -1;
         foreach (var sheet in workbook.Element(S + "sheets")?.Elements(S + "sheet") ?? [])
         {
+            index++;
             if ((string?)sheet.Attribute("state") is "hidden" or "veryHidden")
                 continue;
             var target = _package.Target(workbookPath, (string?)sheet.Attribute(R + "id"));
             if (target is null || _package.Part(target)?.Root is not { } xml || xml.Name != S + "worksheet")
                 continue; // chart sheets and dialog sheets have no cells
-            result.Sheets.Add(ReadSheet((string?)sheet.Attribute("name") ?? "Sheet", xml));
+            var read = ReadSheet((string?)sheet.Attribute("name") ?? "Sheet", xml);
+            if (titles.TryGetValue(index, out var titleRows))
+                read.TitleRows = titleRows;
+            result.Sheets.Add(read);
         }
         return result;
     }
+
+    /// <summary>
+    /// The 0-based rows of a print titles reference: <c>'Bill of quantities'!$3:$4</c>, also next to repeated columns
+    /// (<c>Sheet1!$A:$B,Sheet1!$1:$2</c>); null when it repeats columns only.
+    /// </summary>
+    internal static (int First, int Last)? PrintTitleRows(string reference)
+    {
+        foreach (var part in reference.Split(','))
+        {
+            var match = PrintTitleRowsPattern.Match(part[(part.LastIndexOf('!') + 1)..].Trim());
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var first) && int.TryParse(match.Groups[2].Value, out var last)
+                && first >= 1 && last >= first)
+                return (first - 1, last - 1);
+        }
+        return null;
+    }
+
+    private static readonly Regex PrintTitleRowsPattern = new(@"^\$?(\d+):\$?(\d+)$", RegexOptions.CultureInvariant);
 
     private void ReadSharedStrings(XDocument? xml)
     {

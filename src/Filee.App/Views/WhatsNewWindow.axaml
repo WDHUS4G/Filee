@@ -1,0 +1,42 @@
+<!-- "What's new" after an update (WhatsNewService), and again from About: the version's slides with Previous / Next,
+     dots for the position, "Get started" on the last slide and ✕ at the top right. ←/→ move, Esc closes. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:Filee.App.Controls"
+        x:Class="Filee.App.Views.WhatsNewWindow"
+        Title="Filee"
+        Icon="avares://Filee/Assets/Icons/filee.ico"
+        Width="560"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        WindowStartupLocation="CenterScreen">
+  <Border Classes="card" Margin="12" Padding="20,14,20,18">
+    <StackPanel>
+      <!-- Header: drag here to move the window -->
+      <DockPanel x:Name="Header" Background="Transparent" Margin="0,0,0,12">
+        <Button x:Name="CloseButton" DockPanel.Dock="Right" Classes="icon" Padding="6" VerticalAlignment="Center"
+                Click="OnClose" ToolTip.Tip="{DynamicResource common.close}" AutomationProperties.Name="{DynamicResource common.close}">
+          <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
+        </Button>
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Image Source="avares://Filee/Assets/Icons/filee.png" Width="20" Height="20" />
+          <TextBlock x:Name="HeaderText" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </StackPanel>
+      </DockPanel>
+
+      <!-- The whole width of the card (560 - 2 × 12 margin - 2 × 20 padding), 16:9 -->
+      <c:SlideShow x:Name="Slides" MediaWidth="496" MediaHeight="279" />
+
+      <!-- Previous on the left (hidden on the first slide), Next / Get started on the right; mirrored in Arabic -->
+      <Grid ColumnDefinitions="*,*" Margin="0,18,0,0">
+        <Button x:Name="PreviousButton" HorizontalAlignment="Left" MinWidth="96" HorizontalContentAlignment="Center"
+                Content="{DynamicResource whats_new.previous}" Click="OnPrevious" />
+        <Button x:Name="PrimaryButton" Grid.Column="1" Classes="accent" HorizontalAlignment="Right" MinWidth="112"
+                HorizontalContentAlignment="Center" IsDefault="True" Click="OnPrimary" />
+      </Grid>
+    </StackPanel>
+  </Border>
+</Window>

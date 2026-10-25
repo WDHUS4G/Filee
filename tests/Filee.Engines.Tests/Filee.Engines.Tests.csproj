@@ -23,5 +23,7 @@
   <ItemGroup>
     <!-- Small OFL test fonts for FontTests (see Fonts/OFL.txt and Fonts/make-test-fonts.py). -->
     <None Update="Fonts\*.ttf;Fonts\*.otf;Fonts\*.woff2" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Small Shapefiles written by GDAL for the geospatial tests (synthetic data; Geo/make-test-geo.py recreates them). -->
+    <None Update="Geo\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

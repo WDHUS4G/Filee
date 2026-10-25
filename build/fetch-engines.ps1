@@ -10,7 +10,7 @@
       libreoffice/   LibreOffice (MPL-2.0), extracted from the official MSI via an administrative install
                      + H2Orestart (GPL-3.0) unpacked into share/extensions for HWP/HWPX import
       jre/           Eclipse Temurin JRE 21 (GPLv2 + Classpath Exception), used by H2Orestart
-      rhwp/          rhwp command line (MIT), HWP/HWPX -> PDF
+      rhwp/          rhwp command line (MIT), HWP/HWPX -> PDF, with the Microsoft C++ runtime DLLs next to rhwp.exe
       pandoc/        Pandoc (GPL-2.0-or-later, separate program), Markdown/HTML and MD/HTML/ODT/RTF -> HWPX
       7zip/          7-Zip console (7z.exe + 7z.dll, LGPL-2.1 + unRAR restriction, separate program), archives
       ghostscript/   Ghostscript (AGPL-3.0, separate program) from conda-forge, EPS/PS <-> PDF, with the Microsoft
@@ -18,15 +18,25 @@
       ffmpeg/        FFmpeg (GPL-3.0 build, separate program), video and audio; bin/ffmpeg.exe + bin/ffprobe.exe
       calibre/       calibre (GPL-3.0, separate program), extracted from the official MSI via an administrative
                      install: ebook-convert for LIT, LRF, PDB, ... and MOBI / AZW3 output
+      tesseract/     Tesseract OCR (Apache-2.0, separate program), UB Mannheim's Windows build unpacked from its
+                     installer with 7-Zip (never run); the language data is downloaded by the app when needed
 
   Every download is pinned to a version and verified with SHA-256 (src/Filee.Engines/Infrastructure/engines.json,
   shared with the app). Downloads are cached in build/.cache.
+
+  The Microsoft C++ runtime (the "vcruntime" component: MSVCP140.dll, VCRUNTIME140.dll, ...) is copied next to the
+  programs built with Visual C++ that do not ship it themselves (rhwp.exe, gswin64c.exe; LibreOffice's own copy goes
+  into its program folder), so they also run on PCs without the Visual C++ Redistributable. -RuntimeTo copies it into
+  more folders (build-installer.ps1: next to Filee.exe, for unhwp.dll).
 
 .PARAMETER Destination
   Target "engines" folder. Default: <repo>/engines (picked up automatically by debug builds).
 
 .PARAMETER Only
   Restrict to some engines, e.g. -Only rhwp,pandoc (LibreOffice is large: ~356 MB download).
+
+.PARAMETER RuntimeTo
+  More folders that get the Microsoft C++ runtime DLLs, e.g. the published app folder.
 
 .EXAMPLE
   pwsh build/fetch-engines.ps1
@@ -37,7 +47,8 @@
 param(
     [string]$Destination = (Join-Path $PSScriptRoot '..\engines'),
     # Accepts an array (-Only rhwp,jre from PowerShell) or one comma-separated string (pwsh -File ... -Only rhwp,jre).
-    [string[]]$Only
+    [string[]]$Only,
+    [string[]]$RuntimeTo
 )
 
 $ErrorActionPreference = 'Stop'
@@ -104,6 +115,21 @@ function Expand-Conda([string]$conda, [string]$target) {
     Remove-Item $tmp -Recurse -Force
 }
 
+# Copies the Microsoft C++ runtime DLLs (the "vcruntime" component, unpacked once per run into build/.cache) into
+# $target, next to a program built with Visual C++: Windows looks for its DLLs in the program's folder first, so it
+# runs on PCs without the Visual C++ Redistributable. Same as EngineInstaller does for Ghostscript.
+$script:vcRuntime = $null
+function Copy-VcRuntime([string]$target) {
+    if (-not $script:vcRuntime) {
+        $script:vcRuntime = Join-Path $cache 'vcruntime'
+        Expand-Conda (Get-Engine 'vcruntime') $script:vcRuntime
+    }
+    Copy-Item (Join-Path $script:vcRuntime '*.dll') $target -Force
+    foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+        if (-not (Test-Path (Join-Path $target $dll))) { throw "$dll is missing in $target after copying the C++ runtime." }
+    }
+}
+
 # Removes parts of LibreOffice that headless conversion never uses (~500 MB):
 # help, readmes, the MSI stub copied by the admin install, the gallery, and spell-check dictionaries except
 # English and Korean (their hyphenation patterns can affect page layout when exporting PDFs).
@@ -113,6 +139,15 @@ function Optimize-LibreOffice([string]$root) {
     $remove += Get-ChildItem (Join-Path $root 'share\extensions') -Directory -Filter 'dict-*' |
         Where-Object { $_.Name -notin @('dict-en', 'dict-ko') } | ForEach-Object FullName
     foreach ($path in $remove) { Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue }
+    # The MSI installs LibreOffice's C++ runtime into the system folder; the administrative install leaves it in
+    # System64, where soffice.exe never looks. Same as AppLocalRuntime.CopyLibreOfficeRuntime.
+    $system64 = Join-Path $root 'System64'
+    if (Test-Path $system64) {
+        foreach ($dll in Get-ChildItem $system64 -Filter '*.dll') {
+            $target = Join-Path $root "program\$($dll.Name)"
+            if (-not (Test-Path $target)) { Copy-Item $dll.FullName $target }
+        }
+    }
 }
 
 $selected = if ($Only) { @($Only -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ }) } else { @($engines.Keys) }
@@ -129,6 +164,8 @@ if ('rhwp' -in $selected) {
     if ($exe.DirectoryName -ne (Join-Path $Destination 'rhwp')) {
         Get-ChildItem $exe.DirectoryName -Force | Move-Item -Destination (Join-Path $Destination 'rhwp') -Force
     }
+    # rhwp.exe imports MSVCP140.dll and VCRUNTIME140.dll; without them Windows does not start it (#248).
+    Copy-VcRuntime (Join-Path $Destination 'rhwp')
 }
 
 if ('pandoc' -in $selected) {
@@ -215,7 +252,21 @@ if ('ghostscript' -in $selected) {
     Expand-Conda (Get-Engine 'ghostscript') $target
     if (-not (Test-Path (Join-Path $target 'gswin64c.exe'))) { throw 'gswin64c.exe not found in the Ghostscript package.' }
     # App-local Microsoft C++ runtime next to gswin64c.exe, as EngineInstaller does.
-    Copy-Item (Join-Path $Destination 'vcruntime\*.dll') $target -Force
+    Copy-VcRuntime $target
+}
+
+if ('tesseract' -in $selected) {
+    # Trimmed like EngineInstaller.TrimTesseract: no training programs, manuals, installer files or language data.
+    $setup = Get-Engine 'tesseract'
+    $sevenZip = Join-Path $Destination '7zip\7z.exe'
+    if (-not (Test-Path $sevenZip)) { throw 'Tesseract is unpacked with engines/7zip: use -Only 7zip,tesseract.' }
+    $target = Join-Path $Destination 'tesseract'
+    Reset-Folder $target
+    & $sevenZip x -y "-o$target" $setup | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "7-Zip could not unpack the Tesseract installer (exit code $LASTEXITCODE)." }
+    foreach ($folder in '$PLUGINSDIR', 'tessdata') { Remove-Item -LiteralPath (Join-Path $target $folder) -Recurse -Force -ErrorAction SilentlyContinue }
+    Get-ChildItem $target -File | Where-Object { $_.Extension -in '.exe', '.html' -and $_.Name -ne 'tesseract.exe' } | Remove-Item -Force
+    if (-not (Test-Path (Join-Path $target 'tesseract.exe'))) { throw 'tesseract.exe not found in the installer.' }
 }
 
 if ('calibre' -in $selected) {
@@ -232,6 +283,11 @@ if ('calibre' -in $selected) {
     Reset-Folder $target
     Get-ChildItem $convert.DirectoryName -Force | Move-Item -Destination $target
     Remove-Item $tmp -Recurse -Force
+}
+
+foreach ($folder in $RuntimeTo) {
+    if (-not (Test-Path $folder -PathType Container)) { throw "-RuntimeTo: $folder is not a folder." }
+    Copy-VcRuntime $folder
 }
 
 Write-Host "Engines ready in $Destination"

@@ -1,0 +1,36 @@
+<!-- "Filee can't convert .ncm files yet" card in the bottom-right corner, shown when the donut closes on files of a type
+     Filee doesn't know (RadialController): "Request this format" opens the GitHub form with the extension filled in. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Filee.App.Views.FormatRequestNoticeWindow"
+        Title="Filee"
+        Width="440"
+        SizeToContent="Height"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        CanResize="False">
+  <Border Classes="card" Margin="12" Padding="16,14">
+    <DockPanel>
+      <Image DockPanel.Dock="Left" Source="avares://Filee/Assets/Icons/filee.png" Width="36" Height="36"
+             VerticalAlignment="Top" Margin="0,2,12,0" />
+      <StackPanel Spacing="8">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="icon" Padding="4" VerticalAlignment="Top" Click="OnClose"
+                  AutomationProperties.Name="{DynamicResource common.close}">
+            <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
+          </Button>
+          <TextBlock x:Name="TitleText" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBlock Classes="caption" Text="{DynamicResource format_request.notice_text}" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+          <Button Classes="accent" Click="OnRequest" Padding="12,5" Content="{DynamicResource format_request.request}" />
+          <Button Content="{DynamicResource common.close}" Click="OnClose" Padding="12,5" />
+        </StackPanel>
+      </StackPanel>
+    </DockPanel>
+  </Border>
+</Window>

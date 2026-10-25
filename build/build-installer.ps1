@@ -1,23 +1,32 @@
 <#
 .SYNOPSIS
-  Builds the Windows installer Filee-<version>-win-Setup.exe (installer/Filee.iss) and, with -Portable, the portable
-  zip, into -OutputDir.
+  Builds the Windows installer Filee-<version>-win-Setup.exe (Filee's own, src/Filee.Setup) and, with -Portable, the
+  portable zip, into -OutputDir.
 
 .DESCRIPTION
   Without -PublishDir the app is published first (Release, self-contained, -p:FileeRelease=true) into
-  publish/win-x64, together with the Windows 11 Explorer menu extension (build-explorer-menu.ps1) and the bundled
-  small engines rhwp and 7-Zip (fetch-engines.ps1); the large engines are downloaded by the app (engines.json).
+  publish/win-x64, together with the Windows 11 Explorer menu extension (build-explorer-menu.ps1), the bundled
+  small engines rhwp and 7-Zip and the Microsoft C++ runtime DLLs next to rhwp.exe and Filee.exe
+  (fetch-engines.ps1); the large engines are downloaded by the app (engines.json).
 
-  Inno Setup 7 is downloaded once into build/.cache (pinned, SHA-256 verified) and set up there in its own portable
-  mode: nothing is installed or registered on the build machine. The installer's engine page is generated from
-  EngineDownloads by build/tools/make-installer-engines.cs.
+  Setup itself (src/Filee.Setup) is published as one self-contained, trimmed program (no .NET needed on the PC);
+  build/tools/make-setup.cs appends the publish folder to it as an LZMA payload with a SHA-256 manifest, and the
+  engines Setup offers from EngineDownloads. The portable zip is the publish folder as it is: without Setup's
+  uninstall.exe next to Filee.exe, Filee knows it is a portable copy.
+
+.PARAMETER CertificateThumbprint
+  Signs the release (build/sign-windows.ps1): the programs in the publish folder that come unsigned, the Setup
+  program (it becomes uninstall.exe) and, after the payload is appended, Setup.exe. The release workflow builds
+  without it; build/sign-release.ps1 signs its output on a PC signed in to SimplySign.
 
 .PARAMETER CheckOnly
-  Compiles the script against a stub app without compression, to check installer/Filee.iss quickly (CI).
+  Builds Setup around a stub app (fast compression) and runs it in a sandbox: install, update and uninstall into a
+  scratch folder with its own registry file, nothing on the PC is touched (CI).
 
 .EXAMPLE
   pwsh build/build-installer.ps1
-  pwsh build/build-installer.ps1 -Version 1.2.0 -Portable
+  pwsh build/build-installer.ps1 -Version 2.0.0 -Portable
+  pwsh build/build-installer.ps1 -Version 2.0.0 -Portable -PublishDir app -SetupProgram Filee.Setup.exe -CertificateThumbprint <sha1>
   pwsh build/build-installer.ps1 -CheckOnly
 #>
 [CmdletBinding()]
@@ -26,54 +35,17 @@ param(
     [string]$Version,
     # A finished publish folder (Filee.exe, FileeExplorerMenu.dll/.msix, engines\); skips publishing.
     [string]$PublishDir,
+    # A finished Setup program (Filee.Setup.exe from an earlier run); skips publishing src/Filee.Setup.
+    [string]$SetupProgram,
     [string]$OutputDir = (Join-Path $PSScriptRoot '..\Releases'),
     [switch]$Portable,
+    [string]$CertificateThumbprint,
     [switch]$CheckOnly
 )
 
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $cache = Join-Path $PSScriptRoot '.cache'
-
-# Inno Setup 7.1.0, 64-bit edition. Update the version, hash and size together
-# (hashes: https://github.com/jrsoftware/issrc/releases, "Verifying Inno Setup Downloads" on jrsoftware.org).
-$innoVersion = '7.1.0'
-$innoSha256 = '0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F'
-$innoSize = 14304168
-$innoUrl = "https://github.com/jrsoftware/issrc/releases/download/is-$($innoVersion.Replace('.', '_'))/innosetup-$innoVersion-x64.exe"
-
-function Get-Iscc {
-    $folder = Join-Path $cache "innosetup-$innoVersion"
-    $iscc = Join-Path $folder 'ISCC.exe'
-    if (Test-Path $iscc) { return $iscc }
-
-    New-Item -ItemType Directory -Force -Path $cache | Out-Null
-    $setup = Join-Path $cache "innosetup-$innoVersion-x64.exe"
-    if (-not ((Test-Path $setup) -and (Get-FileHash $setup -Algorithm SHA256).Hash -eq $innoSha256)) {
-        Write-Host "get  $innoUrl"
-        & curl.exe --fail --location --silent --show-error --connect-timeout 20 --retry 3 --max-time 300 --output $setup $innoUrl
-        if ($LASTEXITCODE -ne 0) { throw "curl exit code $LASTEXITCODE" }
-        $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
-        if ($hash -ne $innoSha256) {
-            Remove-Item $setup
-            throw "Inno Setup checksum mismatch (got $hash, size $((Get-Item $setup).Length), expected $innoSize bytes)"
-        }
-    }
-
-    # /PORTABLE=1 is Inno Setup's own portable mode: no uninstaller, no file association, no shortcuts, no registry.
-    # /CURRENTUSER keeps it from asking for administrator rights.
-    Write-Host "unpack Inno Setup $innoVersion (portable)"
-    $partial = "$folder.partial"
-    Remove-Item $partial -Recurse -Force -ErrorAction SilentlyContinue
-    $process = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList @(
-        '/PORTABLE=1', '/CURRENTUSER', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOICONS',
-        "/DIR=`"$partial`"", "/LOG=`"$cache\innosetup-$innoVersion.log`"")
-    if ($process.ExitCode -ne 0 -or -not (Test-Path (Join-Path $partial 'ISCC.exe'))) {
-        throw "Inno Setup setup failed with exit code $($process.ExitCode) (see $cache\innosetup-$innoVersion.log)"
-    }
-    Move-Item $partial $folder
-    return $iscc
-}
 
 function Invoke-Checked([string]$what, [scriptblock]$command) {
     & $command
@@ -87,11 +59,15 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $OutputDir = (Resolve-Path $OutputDir).Path
 
 if ($CheckOnly) {
-    # The script only needs a folder with Filee.exe in it.
-    $PublishDir = Join-Path $cache 'installer-check\app'
-    New-Item -ItemType Directory -Force -Path $PublishDir | Out-Null
+    # A stand-in app: Setup only needs files, Filee.exe among them.
+    $check = Join-Path $cache 'installer-check'
+    Remove-Item $check -Recurse -Force -ErrorAction SilentlyContinue
+    $PublishDir = Join-Path $check 'app'
+    New-Item -ItemType Directory -Force -Path (Join-Path $PublishDir 'cli'), (Join-Path $PublishDir 'engines\rhwp') | Out-Null
     Set-Content (Join-Path $PublishDir 'Filee.exe') 'stub' -NoNewline
-    $OutputDir = Join-Path $cache 'installer-check'
+    Set-Content (Join-Path $PublishDir 'cli\filee.cmd') "@`"%~dp0..\filee-cli.exe`" %*" -Encoding ascii
+    Set-Content (Join-Path $PublishDir 'engines\rhwp\rhwp.exe') 'stub' -NoNewline
+    $OutputDir = $check
 }
 elseif (-not $PublishDir) {
     $PublishDir = Join-Path $root 'publish\win-x64'
@@ -101,38 +77,94 @@ elseif (-not $PublishDir) {
             "-p:Version=$Version" -p:PublishReadyToRun=true -p:FileeRelease=true -o $PublishDir
     }
     # The command line, in the same folder so it shares the runtime and the engines (filee-cli.exe). Its name can't
-    # be filee.exe next to Filee.exe, so the "filee" command is cli\filee.cmd, which the installer can put on PATH.
+    # be filee.exe next to Filee.exe, so the "filee" command is cli\filee.cmd, which Setup can put on PATH.
     Invoke-Checked 'dotnet publish (cli)' {
         dotnet publish (Join-Path $root 'src\Filee.Cli\Filee.Cli.csproj') -c Release -r win-x64 --self-contained `
             "-p:Version=$Version" -p:PublishReadyToRun=true -p:FileeRelease=true -o $PublishDir
     }
+    # Native debug symbols from NuGet packages (libSkiaSharp.pdb, libHarfBuzzSharp.pdb: ~105 MB) are useless to users.
+    # Filee.App's publish removes them, but publishing the command line into the same folder brings them back.
+    Get-ChildItem $PublishDir -Filter 'lib*.pdb' | Remove-Item
     New-Item -ItemType Directory -Force -Path (Join-Path $PublishDir 'cli') | Out-Null
     Set-Content (Join-Path $PublishDir 'cli\filee.cmd') "@`"%~dp0..\filee-cli.exe`" %*" -Encoding ascii
     # Next to Filee.exe: the Explorer menu package's external location is the install folder.
     & (Join-Path $PSScriptRoot 'build-explorer-menu.ps1') -Destination $PublishDir -Version $Version
-    # Only the small rhwp and 7-Zip are bundled; the app downloads the others when the user picks them.
-    & (Join-Path $PSScriptRoot 'fetch-engines.ps1') -Only rhwp, 7zip -Destination (Join-Path $PublishDir 'engines')
+    # Only the small rhwp and 7-Zip are bundled; the app downloads the others when the user picks them. The Microsoft
+    # C++ runtime goes next to rhwp.exe and next to Filee.exe (unhwp.dll imports VCRUNTIME140.dll), so neither needs
+    # the Visual C++ Redistributable (#248).
+    & (Join-Path $PSScriptRoot 'fetch-engines.ps1') -Only rhwp, 7zip -Destination (Join-Path $PublishDir 'engines') -RuntimeTo $PublishDir
 }
 $PublishDir = (Resolve-Path $PublishDir).Path
 if (-not (Test-Path (Join-Path $PublishDir 'Filee.exe'))) { throw "Filee.exe is missing in $PublishDir" }
+if (-not $CheckOnly) {
+    # Without them rhwp and unhwp fail on PCs without the Visual C++ Redistributable (#248). They go into the payload
+    # and the portable zip; Setup checks again after unpacking (RuntimeCheck) on the user's PC.
+    foreach ($dll in 'vcruntime140.dll', 'engines\rhwp\msvcp140.dll', 'engines\rhwp\vcruntime140.dll') {
+        if (-not (Test-Path (Join-Path $PublishDir $dll))) { throw "$dll is missing in $PublishDir (see fetch-engines.ps1 -RuntimeTo)" }
+    }
+    # A leftover from a run of the old installer or of Setup would make the zip an "installed" copy.
+    foreach ($file in 'uninstall.exe', 'uninstall.json', 'unins000.exe') {
+        if (Test-Path (Join-Path $PublishDir $file)) { throw "$file must not be in $PublishDir" }
+    }
+}
 
-$iscc = Get-Iscc
+# Setup: one self-contained, trimmed program (src/Filee.Setup).
+if (-not $SetupProgram) {
+    $setupFolder = Join-Path $cache 'setup'
+    Remove-Item $setupFolder -Recurse -Force -ErrorAction SilentlyContinue
+    Invoke-Checked 'dotnet publish (setup)' {
+        dotnet publish (Join-Path $root 'src\Filee.Setup\Filee.Setup.csproj') -c Release -r win-x64 -p:FileeSetupPublish=true `
+            "-p:Version=$Version" -o $setupFolder
+    }
+    $SetupProgram = Join-Path $setupFolder 'Filee.Setup.exe'
+}
+$SetupProgram = (Resolve-Path $SetupProgram).Path
+
+# Signed before packing: the app's files are signed inside the payload, and the Setup program's signature carries
+# over to the uninstaller (SetupPayload). Setup.exe itself is signed after the payload is appended.
+$sign = if ($CertificateThumbprint -and -not $CheckOnly) { Join-Path $PSScriptRoot 'sign-windows.ps1' }
+if ($sign) {
+    & $sign -Path $PublishDir, $SetupProgram -CertificateThumbprint $CertificateThumbprint
+}
+
+$setupExe = Join-Path $OutputDir "Filee-$Version-win-Setup.exe"
+Write-Host "pack installer $Version"
+$fast = @(if ($CheckOnly) { '--fast' })
 Push-Location $root
 try {
-    Invoke-Checked 'make-installer-engines' { dotnet run build/tools/make-installer-engines.cs -- installer/obj/engines.iss }
+    Invoke-Checked 'make-setup' { dotnet run --no-cache build/tools/make-setup.cs -- $SetupProgram $PublishDir $Version $setupExe @fast }
 }
 finally {
     Pop-Location
 }
+if (-not (Test-Path $setupExe)) { throw "make-setup did not write $setupExe" }
+if ($sign) {
+    & $sign -Path $setupExe -CertificateThumbprint $CertificateThumbprint
+}
 
-Write-Host "compile installer $Version"
-$options = @('/Q', "/DAppVersion=$Version", "/DPublishDir=$PublishDir", "/O$OutputDir")
-if ($CheckOnly) { $options += '--no-compression' }
-Invoke-Checked 'ISCC' { & $iscc @options (Join-Path $root 'installer\Filee.iss') }
-$setupExe = Join-Path $OutputDir "Filee-$Version-win-Setup.exe"
-if (-not (Test-Path $setupExe)) { throw "ISCC did not write $setupExe" }
 if ($CheckOnly) {
-    Write-Host "installer/Filee.iss compiles"
+    # Install, update and uninstall in a sandbox: a registry file and folders of its own, no administrator rights.
+    $sandbox = Join-Path $check 'sandbox'
+    function Invoke-Setup([string]$exe, [string[]]$arguments) {
+        $process = Start-Process -FilePath $exe -ArgumentList ($arguments + @('/VERYSILENT', '/SUPPRESSMSGBOXES', "/SANDBOX=`"$sandbox`"")) -Wait -PassThru
+        if ($process.ExitCode -ne 0) {
+            Get-ChildItem (Join-Path $sandbox 'Temp') -Filter '*.log' -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName }
+            throw "$(Split-Path $exe -Leaf) $arguments failed with exit code $($process.ExitCode)"
+        }
+    }
+    $installed = Join-Path $sandbox 'Program Files\Filee'
+    Invoke-Setup $setupExe @('/MERGETASKS=desktopicon')
+    foreach ($file in 'Filee.exe', 'cli\filee.cmd', 'engines\rhwp\rhwp.exe', 'uninstall.exe', 'uninstall.json') {
+        if (-not (Test-Path (Join-Path $installed $file))) { throw "Setup did not install $file" }
+    }
+    $registry = Get-Content (Join-Path $sandbox 'registry.json') -Raw
+    if ($registry -notmatch 'C8686E06-8327-40A2-B0F7-3DEDD61D9248\}_is1' -or $registry -notmatch 'uninstall\.exe') { throw 'Setup did not write the uninstall entry' }
+    if (-not (Test-Path (Join-Path $sandbox 'Public\Desktop\Filee.lnk'))) { throw 'Setup did not create the desktop shortcut' }
+    Invoke-Setup $setupExe @()
+    Invoke-Setup (Join-Path $installed 'uninstall.exe') @()
+    if (Test-Path $installed) { throw "The uninstaller left $installed" }
+    if ((Get-Content (Join-Path $sandbox 'registry.json') -Raw) -match '_is1') { throw 'The uninstaller left the uninstall entry' }
+    Write-Host "Setup installs, updates and uninstalls (sandbox: $sandbox)"
     return
 }
 

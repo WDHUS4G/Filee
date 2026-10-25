@@ -4,7 +4,8 @@
 //   Pointer / drag  → resting on a group's slice (ExpandDelay), or moving outward on it, opens its ring; the ring
 //                     stays open on its way out to it (the gap, the neighbours' outer half) and folds on another slice,
 //                     the hole, or going round the outside away from it.
-//   Keyboard        → arrows / Tab move, Enter opens a group or converts, Esc / Backspace fold a ring first.
+//   Keyboard        → arrows move, Enter opens a group or converts, Esc / Backspace fold a ring first, the flip key
+//                     (Tab unless set otherwise) flips the donut (DonutMenu.Flip.cs).
 //   See-through     → Windows and macOS let the pointer and drags through fully transparent pixels: a nearly
 //                     transparent backdrop and LeftThroughSeam keep a group from folding when it only seems to leave.
 
@@ -12,6 +13,7 @@ using Avalonia;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Filee.App.Services;
 
 namespace Filee.App.Controls;
 
@@ -199,13 +201,22 @@ public sealed partial class DonutMenu
     }
 
     /// <summary>
-    /// Keyboard (click mode): arrows and Tab move around the donut, Enter converts or opens a group; in a group's ring
-    /// the arrows move between its slices, Enter converts and Esc / Backspace go back to the donut.
-    /// Returns false for keys left to the window (Esc on the donut closes it).
+    /// Keyboard (click mode): arrows move around the donut, Enter converts or opens a group; in a group's ring the
+    /// arrows move between its slices, Enter converts and Esc / Backspace go back to the donut. The flip key
+    /// (<see cref="FlipKey"/>, Tab by default; with Shift or any other modifier too) flips the donut to its other face
+    /// (<see cref="Flip"/>). Returns false for keys left to the window (Esc on the donut closes it).
     /// </summary>
     public bool HandleKey(Key key, KeyModifiers modifiers = KeyModifiers.None)
     {
-        if (!HandleKeyCore(key, modifiers))
+        if (!IsEditMode && !_progressMode && FlipKey is { } flipKey &&
+            string.Equals(KeyNames.ToHookName(key), flipKey, StringComparison.OrdinalIgnoreCase))
+        {
+            // Also when there is nothing to flip to: the key never does something else (Tab: move the focus).
+            if (!FlipKeyFromHook)
+                Flip();
+            return true;
+        }
+        if (!HandleKeyCore(key))
             return false;
         // The keyboard has the donut now: the mouse resting where it was (or nudged a pixel, or Windows re-sending its
         // position) doesn't take it back; moving it on purpose does.
@@ -214,7 +225,7 @@ public sealed partial class DonutMenu
         return true;
     }
 
-    private bool HandleKeyCore(Key key, KeyModifiers modifiers)
+    private bool HandleKeyCore(Key key)
     {
         if (IsEditMode || _progressMode || Count == 0)
             return false;
@@ -222,7 +233,6 @@ public sealed partial class DonutMenu
         {
             Key.Right or Key.Down => 1,
             Key.Left or Key.Up => -1,
-            Key.Tab => modifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1,
             _ => 0,
         };
 
@@ -269,6 +279,7 @@ public sealed partial class DonutMenu
             return false;
         CollapseGroup();
         SetHover(current < 0 ? (step > 0 ? 0 : Count - 1) : (current + step + Count) % Count);
+        PointAtSelection();
         return true;
     }
 
@@ -294,6 +305,7 @@ public sealed partial class DonutMenu
     {
         if (lastAt is { } at && LeftThroughSeam(at))
             return;
+        _lastExternalAt = null;
         CollapseGroup();
         SetExternalHighlight(-1);
     }
@@ -314,6 +326,13 @@ public sealed partial class DonutMenu
     /// </summary>
     public void SetExternalHit(DonutHit hit, Point? at = null)
     {
+        if (at is not null)
+        {
+            _lastExternalAt = at; // a flip lights up what the drag rests on, on the other face
+            if (IsFlipping)
+                PointAtAngle(DonutGeometry.AngleOf(Center, at.Value),
+                    hit.Kind is DonutHitKind.Segment or DonutHitKind.SubSegment);
+        }
         TrackGroups(hit, at);
         SetExternalHighlight(hit.Kind is DonutHitKind.Segment or DonutHitKind.SubSegment ? hit.Index : -1,
             hit.Kind == DonutHitKind.Center);
@@ -337,7 +356,7 @@ public sealed partial class DonutMenu
         var reach = SubRadii.Outer + BackdropMargin;
         var span = Math.Min(2 * Math.PI, SubSpanOf(count) * count + 2 * BackdropMargin / reach);
         context.DrawEllipse(HitBackdrop, null, center, OuterRadius + PopOut, OuterRadius + PopOut);
-        context.DrawGeometry(HitBackdrop, null, CreateWedge(center, OuterRadius, reach, DonutGeometry.MidAngle(group, Count), span));
+        context.DrawGeometry(HitBackdrop, null, CreateWedge(center, OuterRadius, reach, DonutGeometry.MidAngle(group, Count), span, 0));
     }
 
     /// <summary>
@@ -374,16 +393,31 @@ public sealed partial class DonutMenu
     {
         var group = _shownExpanded;
         var children = Items![group].Children!;
-        var parentMid = DonutGeometry.MidAngle(group, Count);
-        var subSpan = SubSpanOf(children.Count);
+        DrawGroupRing(context, center, bold, regular, group, children, DonutGeometry.MidAngle(group, Count),
+            SubSpanOf(children.Count), _expand.Value, _subHover, group == _expanded,
+            _open.Length == 0 ? 1 : Math.Clamp(_open.Average(), 0, 1), false);
+    }
+
+    private void DrawOldSubRing(DrawingContext context, Point center, Typeface bold, Typeface regular)
+    {
+        var ring = _oldGroup!;
+        if (SliceFlipWidth(true, ring.Index) == 0)
+            return;
+        DrawGroupRing(context, center, bold, regular, ring.Index, ring.Children, _oldFace![ring.Index].Mid,
+            ring.Span, ring.Expansion, ring.SubHover, ring.Expanded, ring.Opening, true);
+    }
+
+    private void DrawGroupRing(DrawingContext context, Point center, Typeface bold, Typeface regular,
+        int group, IReadOnlyList<DonutItem> children, double parentMid, double subSpan, double expansion,
+        int subHover, bool expanded, double opening, bool oldFace)
+    {
         var (inner, outer) = SubRadii;
-        var t = Math.Max(0, _expand.Value);
-        var opening = _open.Length == 0 ? 1 : Math.Clamp(_open.Average(), 0, 1);
+        var t = Math.Max(0, expansion);
         // Grows outward from the group's slice: scaled about the point where it meets the donut.
         var anchor = DonutGeometry.PointAt(center, inner, parentMid);
         var scale = 0.8 + 0.2 * t;
         var transform = Matrix.CreateTranslation(-anchor.X, -anchor.Y) * Matrix.CreateScale(scale, scale) *
-                        Matrix.CreateTranslation(anchor.X, anchor.Y);
+                        Matrix.CreateTranslation(anchor.X, anchor.Y) * SliceFlipTransform(oldFace, group);
 
         using (context.PushTransform(transform))
         using (context.PushOpacity(Math.Clamp(t, 0, 1) * opening))
@@ -394,7 +428,7 @@ public sealed partial class DonutMenu
                 var mid = DonutGeometry.SubMidAngle(parentMid, k, children.Count, subSpan);
                 var wedge = CreateWedge(center, inner, outer, mid, subSpan);
                 context.DrawGeometry(WithOpacity(SliceBrush, SliceOpacity * (item.IsEnabled ? 1 : 0.55)), BorderPen(), wedge);
-                var hot = k == _subHover && group == _expanded && item.IsEnabled;
+                var hot = k == subHover && expanded && item.IsEnabled;
                 if (hot)
                     context.DrawGeometry(WithOpacity(AccentBrush, 0.82), null, wedge);
                 DrawLabel(context, item, center, (inner + outer) / 2, mid, subSpan * (inner + outer) / 2 - 8,

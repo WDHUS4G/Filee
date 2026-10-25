@@ -32,16 +32,22 @@ internal sealed class MarkdownReader
     private static readonly HCharFormat Plain = default;
     private static readonly HCharFormat CodeFormat = new(Shade: "#F1F0F5");
     private readonly string _baseFolder;
+    private readonly string? _resourceRoot;
 
-    private MarkdownReader(string baseFolder) => _baseFolder = baseFolder;
+    private MarkdownReader(string baseFolder, string? resourceRoot)
+    {
+        _baseFolder = baseFolder;
+        _resourceRoot = resourceRoot;
+    }
 
     /// <summary>Parses Markdown text.</summary>
     /// <param name="markdown">The document text.</param>
     /// <param name="baseFolder">Folder of the Markdown file: relative image paths are resolved against it.</param>
-    public static HDocument Read(string markdown, string baseFolder)
+    /// <param name="resourceRoot">When set, images must be inside this folder (e.g. an unpacked TXTZ book).</param>
+    public static HDocument Read(string markdown, string baseFolder, string? resourceRoot = null)
     {
         var parsed = Markdown.Parse(markdown, Pipeline);
-        var reader = new MarkdownReader(baseFolder);
+        var reader = new MarkdownReader(baseFolder, resourceRoot);
         var section = new HSection();
         reader.Blocks(parsed, section.Blocks, new Context());
         var document = new HDocument { Title = Title(parsed) };
@@ -350,7 +356,7 @@ internal sealed class MarkdownReader
 
     private HImage? Image(LinkInline image)
     {
-        var path = ResolveImage(image.Url, _baseFolder);
+        var path = ResolveImage(image.Url, _baseFolder, _resourceRoot);
         if (path is null)
             return null; // remote or missing image: skip rather than produce a broken reference
 
@@ -365,7 +371,7 @@ internal sealed class MarkdownReader
     }
 
     /// <summary>Local image path of a Markdown image target, or null for remote / missing images.</summary>
-    internal static string? ResolveImage(string? target, string baseFolder)
+    internal static string? ResolveImage(string? target, string baseFolder, string? resourceRoot = null)
     {
         if (string.IsNullOrWhiteSpace(target) || target.Contains("://", StringComparison.Ordinal) && !target.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
             return null;
@@ -375,9 +381,9 @@ internal sealed class MarkdownReader
                 ? new Uri(target).LocalPath
                 : Uri.UnescapeDataString(target);
             var candidate = Path.IsPathRooted(path) ? path : Path.Combine(baseFolder, path);
-            return File.Exists(candidate) ? Path.GetFullPath(candidate) : null;
+            return HtmlReader.InsideFolder(candidate, resourceRoot) && File.Exists(candidate) ? Path.GetFullPath(candidate) : null;
         }
-        catch (Exception ex) when (ex is ArgumentException or UriFormatException or NotSupportedException)
+        catch (Exception ex) when (ex is ArgumentException or UriFormatException or NotSupportedException or PathTooLongException)
         {
             return null;
         }

@@ -13,6 +13,7 @@ public partial class GroupEditorWindow : Window
     {
         InitializeComponent();
         Motion.Track(this);
+        UiZoom.Track(this);
         Opened += (_, _) => NameBox.Focus();
         // Before the ComboBox, which would take Enter to open its list again.
         AddBox.AddHandler(KeyDownEvent, OnAddKeyDown, RoutingStrategies.Tunnel);

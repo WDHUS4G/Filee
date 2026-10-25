@@ -1,15 +1,19 @@
 // Command line options:
 //   Filee.exe                          open the main window
 //   Filee.exe --background             start in the tray only (used by "start with Windows")
+//   Filee.exe --whats-new[=1.12.0]     with --background: show this version's "What's new" slides anyway, if they
+//                                      are due (the installer after an update the user started); the value is the
+//                                      version updated from, which decides what is new
 //   Filee.exe --settings               open the main window
 //   Filee.exe --convert a b ...        open the donut for these files (Explorer context menu / Send To)
 //   Filee.exe --convert-list <file>    same, with one path per line in a UTF-8 file (Windows 11 Explorer menu, for
 //                                      selections too long for a command line); the app deletes the file afterwards
-// Used by the installer (installer/Filee.iss):
+// Used by the installer (src/Filee.Setup, Installer.LaunchArguments):
 //   Filee.exe --install-engines=a,b    download these engine packages (EngineDownloads ids) in the engine window;
 //                                      an empty list means the user chose none, so the first-run choice is skipped
 //   Filee.exe --start-with-windows=on|off, --context-menu=on|off
 //                                      set the matching options on the General page
+//   Filee.exe --language=ko            the language picked in Setup (one of LocalizationService.Languages)
 //   Filee.exe --quit                   ask a running Filee to exit, and wait until it has (no window otherwise)
 //   Filee.exe --uninstall-cleanup      quit Filee, then remove what it registered for this user (UninstallCleanup)
 
@@ -22,6 +26,9 @@ namespace Filee.App.Services;
 /// <param name="InstallEngines">Engine packages chosen in the installer; null when the option is absent.</param>
 /// <param name="StartWithWindows">Value of <c>--start-with-windows</c>; null when absent.</param>
 /// <param name="ContextMenu">Value of <c>--context-menu</c>; null when absent.</param>
+/// <param name="Language">Value of <c>--language</c>; null when absent.</param>
+/// <param name="WhatsNew"><c>--whats-new</c>: due slides show even when starting in the background.</param>
+/// <param name="UpdatedFrom">The value of <c>--whats-new</c>: the version the installer updated from; null when absent.</param>
 public sealed record CommandLine(
     bool Background,
     bool ShowSettings,
@@ -31,7 +38,10 @@ public sealed record CommandLine(
     bool UninstallCleanup = false,
     IReadOnlyList<string>? InstallEngines = null,
     bool? StartWithWindows = null,
-    bool? ContextMenu = null)
+    bool? ContextMenu = null,
+    string? Language = null,
+    bool WhatsNew = false,
+    string? UpdatedFrom = null)
 {
     /// <summary>File name prefix of list files written by FileeExplorerMenu.dll (LIST_PREFIX there) into %TEMP%.</summary>
     public const string ListFilePrefix = "Filee-convert-";
@@ -49,6 +59,9 @@ public sealed record CommandLine(
         List<string>? engines = null;
         bool? startWithWindows = null;
         bool? contextMenu = null;
+        string? language = null;
+        var whatsNew = false;
+        string? updatedFrom = null;
 
         foreach (var arg in args)
         {
@@ -72,6 +85,9 @@ public sealed record CommandLine(
                 case "--context-menu" when OnOff(value) is { } on:
                     contextMenu = on;
                     break;
+                case "--language" when !string.IsNullOrWhiteSpace(value):
+                    language = value.Trim();
+                    break;
                 case "--quit":
                     quit = true;
                     break;
@@ -80,6 +96,10 @@ public sealed record CommandLine(
                     break;
                 case "--background":
                     background = true;
+                    break;
+                case "--whats-new":
+                    whatsNew = true;
+                    updatedFrom = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
                     break;
                 case "--settings":
                     settings = true;
@@ -97,7 +117,7 @@ public sealed record CommandLine(
                     break;
             }
         }
-        return new CommandLine(background, settings, files, listFile, quit, cleanup, engines, startWithWindows, contextMenu);
+        return new CommandLine(background, settings, files, listFile, quit, cleanup, engines, startWithWindows, contextMenu, language, whatsNew, updatedFrom);
     }
 
     /// <summary>"--Name=Value" → ("--name", "Value"); "--name" → ("--name", null).</summary>

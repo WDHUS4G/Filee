@@ -34,6 +34,12 @@ internal sealed class Worksheet(string name)
     /// <summary>Rows frozen at the top (usually headers): repeated on every printed page.</summary>
     public int FrozenRows { get; set; }
 
+    /// <summary>
+    /// 0-based rows to repeat at the top of every printed page (Page Layout → Print Titles), or null. They win over
+    /// <see cref="FrozenRows"/> and need not start at the top.
+    /// </summary>
+    public (int First, int Last)? TitleRows { get; set; }
+
     /// <summary>0-based rows that start a new printed page (page breaks set in Excel: Page Layout → Breaks).</summary>
     public SortedSet<int> RowBreaks { get; } = [];
 

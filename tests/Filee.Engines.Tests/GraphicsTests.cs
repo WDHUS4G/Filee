@@ -322,6 +322,87 @@ public class GraphicsTests(EngineFixture fx) : IClassFixture<EngineFixture>
     }
 
     [Fact]
+    public void Svg_external_resources_stay_in_the_drawings_folder()
+    {
+        var dir = fx.NewFolder();
+        var sourceDir = Path.Combine(dir, "source");
+        var outsideDir = Path.Combine(dir, "source-outside"); // shares the folder name's prefix
+        Directory.CreateDirectory(Path.Combine(sourceDir, "images"));
+        Directory.CreateDirectory(outsideDir);
+        using (var allowed = new MagickImage(MagickColors.Lime, 20, 20))
+            allowed.Write(Path.Combine(sourceDir, "allowed.png"));
+        using (var nested = new MagickImage(MagickColors.Blue, 20, 20))
+            nested.Write(Path.Combine(sourceDir, "images", "nested.png"));
+        var secret = Path.Combine(outsideDir, "secret.png");
+        using (var outside = new MagickImage(MagickColors.Red, 20, 20))
+            outside.Write(secret);
+        Write(outsideDir, "shapes.svg", """
+            <svg xmlns="http://www.w3.org/2000/svg"><rect id="r" width="20" height="20" fill="#FF0000"/></svg>
+            """);
+        var svg = Write(sourceDir, "drawing.svg", $"""
+            <svg xmlns="http://www.w3.org/2000/svg" width="100" height="20">
+              <image href="allowed.png" width="20" height="20"/>
+              <image href="images/nested.png" x="20" width="20" height="20"/>
+              <image href="../source-outside/secret.png" x="40" width="20" height="20"/>
+              <image href="{new Uri(secret).AbsoluteUri}" x="60" width="20" height="20"/>
+              <use href="../source-outside/shapes.svg#r" x="80"/>
+            </svg>
+            """);
+
+        using var drawing = SvgRenderer.Load(svg);
+        using var rendered = SvgRenderer.Rasterize(drawing, 1);
+
+        var same = Pixel(rendered, 10, 10);
+        Assert.True(same.G > 200 && same.R < 50, "image beside the drawing: " + same);
+        var below = Pixel(rendered, 30, 10);
+        Assert.True(below.B > 200 && below.R < 50, "image in a subfolder: " + below);
+        foreach (var x in new[] { 50, 70, 90 })
+        {
+            var blocked = Pixel(rendered, x, 10);
+            Assert.False(blocked.R > 200 && blocked.G < 50 && blocked.B < 50, $"resource outside the folder was drawn at x={x}: " + blocked);
+        }
+    }
+
+    [Fact]
+    public async Task Svg_with_a_loose_ampersand_and_html_entities_still_converts()
+    {
+        // Issue #120: generated SVGs with "A & B" in a <text> stopped the XML parser ("parsing EntityName").
+        var dir = fx.NewFolder();
+        var svg = Write(dir, "gemini.svg", """
+            <svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">
+              <rect width="200" height="100" fill="#ff0000"/>
+              <text x="10" y="50" font-size="20">Q&A &amp; R&nbsp;D &copy; 2026 &bogus;</text>
+            </svg>
+            """);
+
+        var job = await fx.ConvertAsync([svg], new Preset { TargetFormat = "png" });
+
+        AssertDone(job);
+        using var png = new MagickImage(job.Outputs.Single());
+        Assert.True(Pixel(png, 3, 3).R > 240, "the drawing was rendered");
+    }
+
+    [Theory]
+    [InlineData("<t>A & B</t>", "<t>A &amp; B</t>")]
+    [InlineData("<t>R&nbsp;D &copy;</t>", "<t>R&#160;D &#169;</t>")]
+    [InlineData("<t>&bogus; &copy</t>", "<t>&amp;bogus; &amp;copy</t>")]
+    [InlineData("<a href=\"x?a=1&b=2\"/>", "<a href=\"x?a=1&amp;b=2\"/>")]
+    public void Loose_ampersands_are_escaped_and_html_entities_become_references(string svg, string repaired) =>
+        Assert.Equal(repaired, Encoding.UTF8.GetString(SvgXmlRepair.FixAmpersands(Encoding.UTF8.GetBytes(svg))!));
+
+    [Theory]
+    [InlineData("<t>A &amp; B &lt; &#38; &#x26;</t>")]
+    [InlineData("<!DOCTYPE svg [<!ENTITY ns_svg \"http://www.w3.org/2000/svg\">]><svg xmlns=\"&ns_svg;\"/>")]
+    [InlineData("<t><!-- a & b --><![CDATA[x && y]]></t>")]
+    [InlineData("<t>no ampersand</t>")]
+    public void Valid_xml_is_left_as_it_is(string svg) =>
+        Assert.Null(SvgXmlRepair.FixAmpersands(Encoding.UTF8.GetBytes(svg)));
+
+    [Fact]
+    public void Text_in_another_encoding_is_not_touched() =>
+        Assert.Null(SvgXmlRepair.FixAmpersands(Encoding.Latin1.GetBytes("<t encoding=\"latin1\">café & co</t>")));
+
+    [Fact]
     public async Task Svgz_round_trip()
     {
         var dir = fx.NewFolder();

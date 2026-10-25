@@ -19,7 +19,15 @@ public sealed partial class EngineItemViewModel(IConverter converter, EngineStat
     [ObservableProperty] private bool _isDragging;
 
     public IConverter Converter { get; } = converter;
-    public string Name => Converter.DisplayName;
+    /// <summary>Localized descriptive name, retaining the engine's technical name for unregistered engines.</summary>
+    public string Name
+    {
+        get
+        {
+            var key = $"engine.{Converter.Id}.name";
+            return loc[key] is var text && text != key ? text : Converter.DisplayName;
+        }
+    }
     public bool IsAvailable { get; } = status.IsAvailable;
     public string StatusText { get; } = status.IsAvailable ? loc["engines.available"] : loc[status.ReasonKey ?? "engines.unavailable"];
 

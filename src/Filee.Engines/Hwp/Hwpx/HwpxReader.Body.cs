@@ -535,7 +535,7 @@ internal sealed partial class HwpxReader
             table.Rows.Add(row);
         }
 
-        // The model has one cell padding per table: cells with their own margins (hasMargin) win when they all agree.
+        // Cells with their own margins (hasMargin) set the table's padding when they all agree.
         if (cellMargins.Count == 1 && cellMargins.Single() is { } shared)
             table.CellMargin = shared;
         table.ColumnCount = Math.Max(table.ColumnCount, widths.Select(w => w.Column + w.Span).DefaultIfEmpty(1).Max());

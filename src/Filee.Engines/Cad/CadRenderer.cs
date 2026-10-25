@@ -46,6 +46,19 @@ internal sealed class PageLayout
         return new SKPoint((float)q.X, (float)q.Y);
     }
 
+    /// <summary>
+    /// The same page seen through a viewport: model space at <paramref name="scale"/> paper units per model unit, with
+    /// <paramref name="viewCenter"/> landing on the paper point <paramref name="paperCenter"/>. Line weights stay in
+    /// millimetres of paper.
+    /// </summary>
+    public PageLayout Through(double scale, Vec2 viewCenter, Vec2 paperCenter)
+    {
+        var center = ToPage(paperCenter);
+        var modelScale = Scale * scale;
+        return new PageLayout(Width, Height, UnitsPerMm, modelScale,
+            center.X - viewCenter.X * modelScale, center.Y + viewCenter.Y * modelScale);
+    }
+
     /// <summary>The WCS point shown at page position (x, y).</summary>
     public Vec2 FromPage(double x, double y) => new((x - _offsetX) / Scale, -(y - _offsetY) / Scale);
 
@@ -137,6 +150,44 @@ internal static class CadRenderer
         var canvas = document.BeginPage(page.Width, page.Height);
         Draw(canvas, scene, page, background: false);
         document.EndPage();
+        document.Close();
+    }
+
+    /// <summary>
+    /// Writes a vector PDF with one page per layout (#172): each page is fitted like a one-page PDF to the layout's
+    /// drawing and viewport frames; inside each frame model space is drawn at the viewport's scale, clipped to it,
+    /// under the layout's own drawing (title block, notes).
+    /// </summary>
+    public static void WritePdf(IReadOnlyList<LayoutSheet> sheets, CadScene model, PdfOptions options, string title, Stream output)
+    {
+        var metadata = new SKDocumentPdfMetadata
+        {
+            Title = title,
+            Creator = "Filee",
+            Producer = "Filee (SkiaSharp)",
+            RasterDpi = 300,
+            Creation = DateTime.Now,
+            Modified = DateTime.Now,
+        };
+        using var document = SKDocument.CreatePdf(output, metadata);
+        foreach (var sheet in sheets)
+        {
+            var page = PageLayout.ForPdf(sheet.Extents, options);
+            var canvas = document.BeginPage(page.Width, page.Height);
+            foreach (var view in sheet.Viewports)
+            {
+                var corner1 = page.Point(new Vec2(view.Frame.MinX, view.Frame.MinY));
+                var corner2 = page.Point(new Vec2(view.Frame.MaxX, view.Frame.MaxY));
+                canvas.Save();
+                canvas.ClipRect(new SKRect(Math.Min(corner1.X, corner2.X), Math.Min(corner1.Y, corner2.Y),
+                    Math.Max(corner1.X, corner2.X), Math.Max(corner1.Y, corner2.Y)));
+                var center = new Vec2((view.Frame.MinX + view.Frame.MaxX) / 2, (view.Frame.MinY + view.Frame.MaxY) / 2);
+                Draw(canvas, model, page.Through(view.Scale, view.ViewCenter, center), background: false);
+                canvas.Restore();
+            }
+            Draw(canvas, sheet.Paper, page, background: false);
+            document.EndPage();
+        }
         document.Close();
     }
 

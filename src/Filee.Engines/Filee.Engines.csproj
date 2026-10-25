@@ -36,7 +36,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Filee" />
     <InternalsVisibleTo Include="Filee.Engines.Tests" />
+    <InternalsVisibleTo Include="Filee.App.Tests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,5 +46,7 @@
     <EmbeddedResource Include="Hwp\Hwpx\blank.hwpx" LogicalName="Filee.Engines.Hwpx.blank.hwpx" />
     <!-- Pinned downloads of optional engines, also read by build/fetch-engines.ps1. -->
     <EmbeddedResource Include="Infrastructure\engines.json" LogicalName="Filee.Engines.engines.json" />
+    <!-- Pinned Tesseract language data, downloaded when an OCR preset needs it (Ocr/OcrLanguages.cs). -->
+    <EmbeddedResource Include="Infrastructure\ocr-languages.json" LogicalName="Filee.Engines.ocr-languages.json" />
   </ItemGroup>
 </Project>

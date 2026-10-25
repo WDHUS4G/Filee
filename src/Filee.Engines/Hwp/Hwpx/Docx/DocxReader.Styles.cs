@@ -21,6 +21,13 @@ internal sealed partial class DocxReader
     {
         public string? Jc;
         public int? Left, Right, FirstLine, Hanging, Before, After, Line;
+
+        /// <summary>
+        /// Indents in hundredths of a character (w:leftChars ...), which Chinese and Japanese documents use. A
+        /// non-zero value wins over the twips one; "0" means the twips value counts again.
+        /// </summary>
+        public int? LeftChars, RightChars, FirstLineChars, HangingChars;
+
         public string? LineRule;
         public bool? KeepNext, KeepLines, PageBreakBefore, WidowControl, SnapToGrid;
         public int? OutlineLevel;
@@ -46,9 +53,26 @@ internal sealed partial class DocxReader
                 Left = Twips(ind, "left") ?? Twips(ind, "start") ?? Left;
                 Right = Twips(ind, "right") ?? Twips(ind, "end") ?? Right;
                 if (Twips(ind, "hanging") is { } hanging)
-                    (Hanging, FirstLine) = (hanging, null);
+                    (Hanging, FirstLine, FirstLineChars) = (hanging, null, null);
                 if (Twips(ind, "firstLine") is { } firstLine)
-                    (FirstLine, Hanging) = (firstLine, null);
+                    (FirstLine, Hanging, HangingChars) = (firstLine, null, null);
+
+                if ((Twips(ind, "leftChars") ?? Twips(ind, "startChars")) is { } leftChars)
+                    LeftChars = leftChars != 0 ? leftChars : null;
+                if ((Twips(ind, "rightChars") ?? Twips(ind, "endChars")) is { } rightChars)
+                    RightChars = rightChars != 0 ? rightChars : null;
+                if (Twips(ind, "hangingChars") is { } hangingChars)
+                {
+                    HangingChars = hangingChars != 0 ? hangingChars : null;
+                    if (hangingChars != 0)
+                        (FirstLine, FirstLineChars) = (null, null);
+                }
+                if (Twips(ind, "firstLineChars") is { } firstLineChars)
+                {
+                    FirstLineChars = firstLineChars != 0 ? firstLineChars : null;
+                    if (firstLineChars != 0)
+                        (Hanging, HangingChars) = (null, null);
+                }
             }
             if (pPr.Element(W + "spacing") is { } spacing)
             {
@@ -284,6 +308,14 @@ internal sealed partial class DocxReader
         var ilvl = direct.Ilvl ?? para.Ilvl ?? 0;
         if (numId is not null && _numberingLevels.TryGetValue(numId, out var levels))
             para.Apply(levels[Math.Clamp(ilvl, 0, 8)].PPr);
+        // numId 0 on the paragraph itself turns numbering off, and Word then drops the indents the paragraph would
+        // inherit for the list (a style's first-line indent too): only the paragraph's own left and first-line indents
+        // count. LibreOffice does the same.
+        if (direct.NumId == "0")
+        {
+            (para.Left, para.FirstLine, para.Hanging) = (null, null, null);
+            (para.LeftChars, para.FirstLineChars, para.HangingChars) = (null, null, null);
+        }
         para.Apply(pPr);
         para.NumId = numId;
         para.Ilvl = ilvl;
@@ -319,9 +351,17 @@ internal sealed partial class DocxReader
                int.TryParse(name.AsSpan(8), out var byName) && byName is >= 1 and <= 9 ? byName : 0;
     }
 
-    private HParaFormat ParaFormat(ParaProps p)
+    /// <param name="fontSize">Font size of the paragraph (half points): one character of the *Chars indents.</param>
+    private HParaFormat ParaFormat(ParaProps p, int? fontSize)
     {
-        var firstLine = p.Hanging is { } hanging ? -hanging : p.FirstLine ?? 0;
+        // A character is the paragraph's font size: 10.5 pt (21 half points) = 210 twips.
+        var character = (fontSize ?? 20) * 10;
+        int? Chars(int? hundredths) => hundredths is { } value ? (int)Math.Round(value * character / 100.0) : null;
+        var left = Chars(p.LeftChars) ?? p.Left;
+        var right = Chars(p.RightChars) ?? p.Right;
+        var firstLine = Chars(p.HangingChars) is { } hangingChars ? -hangingChars
+            : Chars(p.FirstLineChars) is { } firstLineChars ? firstLineChars
+            : p.Hanging is { } hanging ? -hanging : p.FirstLine ?? 0;
         HLineSpacing? lineSpacing = p.Line is not { } line ? null : p.LineRule switch
         {
             "exact" => new HLineSpacing(HLineSpacingKind.Fixed, HwpxUnits.FromTwips(line)),
@@ -337,8 +377,8 @@ internal sealed partial class DocxReader
                 "distribute" => HAlign.Distribute,
                 _ => HAlign.Left,
             },
-            Left: HwpxUnits.FromTwips(p.Left ?? 0),
-            Right: HwpxUnits.FromTwips(p.Right ?? 0),
+            Left: HwpxUnits.FromTwips(left ?? 0),
+            Right: HwpxUnits.FromTwips(right ?? 0),
             FirstLine: HwpxUnits.FromTwips(firstLine),
             Before: HwpxUnits.FromTwips(p.Before ?? 0),
             After: HwpxUnits.FromTwips(p.After ?? 0),
@@ -410,7 +450,7 @@ internal sealed partial class DocxReader
         {
             var bullet = level.Format == "bullet";
             numbering.Levels.Add(bullet
-                ? new HNumberingLevel("DIGIT", BulletText(level.Text), level.Start, Bullet: true)
+                ? new HNumberingLevel("DIGIT", BulletText(level.Text, LevelFont(level.RPr)), level.Start, Bullet: true)
                 : new HNumberingLevel(NumberFormat(level.Format), NumberText(level.Text, level.Format), level.Start, Bullet: false));
         }
         _numberings[numId] = numbering;
@@ -445,18 +485,27 @@ internal sealed partial class DocxReader
         return new string(chars);
     }
 
-    /// <summary>Word bullets often use Symbol/Wingdings private-use code points; map them to Unicode.</summary>
-    private static string BulletText(string text) => text switch
+    /// <summary>The font of a list level's marker (w:lvl/w:rPr/w:rFonts), e.g. Wingdings for ▪ and ☐ bullets.</summary>
+    private static string? LevelFont(XElement? rPr) =>
+        rPr?.Element(W + "rFonts") is { } fonts ? Attr(fonts, "ascii") ?? Attr(fonts, "hAnsi") : null;
+
+    /// <summary>
+    /// Word bullets often use Symbol/Wingdings private-use code points; map them to Unicode, by the bullet's font
+    /// when it is a symbol font (SymbolFonts), else by the usual bullets of those fonts.
+    /// </summary>
+    private static string BulletText(string text, string? font = null) => SymbolFonts.Map(font, text) ?? text switch
     {
-        "" or "\uF0B7" or "\uF09F" or "•" => "●",
+        "" => "●",
+        "\uF0B7" or "\uF09F" => "•",
         "o" or "\uF06F" => "○",
-        "\uF0A7" or "\uF06E" or "▪" => "■",
+        "\uF0A7" => "▪",
+        "\uF06E" => "■",
         "\uF0D8" => "➢",
         "\uF076" => "❖",
         "\uF0FC" => "✓",
         "\uF071" => "❑",
         "\uF075" or "\uF0A8" => "◆",
-        "-" or "–" or "\uF02D" => "-",
+        "\uF02D" => "-",
         _ when text.Length > 0 && text[0] >= '\uF000' => "●",
         _ => text,
     };

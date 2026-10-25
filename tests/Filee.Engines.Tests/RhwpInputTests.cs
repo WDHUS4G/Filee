@@ -138,6 +138,20 @@ public class RhwpInputTests(EngineFixture fx) : IClassFixture<EngineFixture>
         Assert.Empty(RhwpInput.PdfOptions(_ => null));
     }
 
+    [Fact]
+    public void Installed_generic_fonts_are_passed_to_rhwp_as_pdf_fallbacks()
+    {
+        static InstalledFont? Lookup(string name) => name is "Noto Serif" or "Noto Sans" or "Noto Sans Mono"
+            ? new InstalledFont(true, _ => true)
+            : null;
+
+        Assert.Equal([
+            "--fallback-serif", "Noto Serif",
+            "--fallback-sans", "Noto Sans",
+            "--fallback-mono", "Noto Sans Mono",
+        ], RhwpInput.PdfOptions(Lookup));
+    }
+
     /// <summary>
     /// The #49 form in a package of Filee's HWPX writer: "Before", then the tall outer table. With
     /// <paramref name="fromHwp"/> it carries the marker rhwp's export-hwpx writes.

@@ -1,0 +1,24 @@
+<!-- Styles for Filee's own controls, kept out of Soft.axaml, which the installer shares. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:Filee.App.Controls">
+
+  <!-- The crop overlay's rings read clockwise in Arabic too, like the donut (their labels are shaped right to left). -->
+  <Style Selector="c|AspectDial, c|AspectGlyph, c|CropSummaryRing">
+    <Setter Property="FlowDirection" Value="LeftToRight" />
+  </Style>
+
+  <!-- ───────── Donut control colours ───────── -->
+  <Style Selector="c|DonutMenu">
+    <Setter Property="SliceBrush" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="SliceBorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource SoftRadius}" />
+    <Setter Property="CenterBrush" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="AccentBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="OnAccentBrush" Value="{DynamicResource OnAccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="SecondaryForeground" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="DangerBrush" Value="{DynamicResource DangerBrush}" />
+    <Setter Property="SuccessBrush" Value="{DynamicResource SuccessBrush}" />
+  </Style>
+</Styles>

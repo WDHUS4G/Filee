@@ -7,7 +7,7 @@ using Filee.Core.Formats;
 namespace Filee.Core.Presets;
 
 /// <summary>Resolves output file paths from <see cref="OutputRule"/>s.</summary>
-public static class OutputPathResolver
+public static partial class OutputPathResolver
 {
     /// <summary>Values available to file name pattern tokens.</summary>
     public readonly record struct Tokens(string SourcePath, string PresetName, int Index, DateTime Now);
@@ -24,7 +24,11 @@ public static class OutputPathResolver
     public static string? Resolve(OutputRule rule, Tokens tokens, string targetExtension,
         Func<string, bool> exists, string? suffix = null)
     {
-        var sourceDir = Path.GetDirectoryName(Path.GetFullPath(tokens.SourcePath)) ?? "";
+        // A folder given as "Photos\" (the command line keeps what was typed) is named and placed like "Photos".
+        tokens = tokens with { SourcePath = Path.TrimEndingDirectorySeparator(tokens.SourcePath) };
+        var sourceDir = string.IsNullOrWhiteSpace(rule.SourceFolder)
+            ? Path.GetDirectoryName(Path.GetFullPath(tokens.SourcePath)) ?? ""
+            : Path.GetFullPath(rule.SourceFolder);
         var dir = rule.Location switch
         {
             OutputLocation.Subfolder => Path.Combine(sourceDir, Sanitize(ExpandPattern(rule.SubfolderName, tokens), "converted")),
@@ -115,15 +119,21 @@ public static class OutputPathResolver
         if (string.IsNullOrWhiteSpace(pattern))
             pattern = "{name}";
 
-        var ext = FormatRegistry.ExtensionOf(tokens.SourcePath);
-        return pattern
-            .Replace("{name}", FormatRegistry.NameWithoutExtension(tokens.SourcePath), StringComparison.OrdinalIgnoreCase)
-            .Replace("{ext}", ext, StringComparison.OrdinalIgnoreCase)
-            .Replace("{preset}", tokens.PresetName, StringComparison.OrdinalIgnoreCase)
-            .Replace("{date}", tokens.Now.ToString("yyyyMMdd"), StringComparison.OrdinalIgnoreCase)
-            .Replace("{time}", tokens.Now.ToString("HHmmss"), StringComparison.OrdinalIgnoreCase)
-            .Replace("{index}", tokens.Index.ToString(), StringComparison.OrdinalIgnoreCase);
+        // One pass over the pattern only: a source named "Minutes {date}.docx" keeps "{date}" in its name instead of
+        // having the token inside the inserted name expanded too.
+        return Token().Replace(pattern, match => match.Groups[1].Value.ToLowerInvariant() switch
+        {
+            "name" => FormatRegistry.NameWithoutExtension(tokens.SourcePath),
+            "ext" => FormatRegistry.ExtensionOf(tokens.SourcePath),
+            "preset" => tokens.PresetName,
+            "date" => tokens.Now.ToString("yyyyMMdd"),
+            "time" => tokens.Now.ToString("HHmmss"),
+            _ => tokens.Index.ToString(),
+        });
     }
+
+    [GeneratedRegex(@"\{(name|ext|preset|date|time|index)\}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Token();
 
     /// <summary>Removes characters that are invalid in file names on any supported OS.</summary>
     public static string Sanitize(string name, string fallback)

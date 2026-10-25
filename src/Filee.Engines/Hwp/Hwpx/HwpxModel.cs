@@ -130,6 +130,13 @@ internal sealed class HTable : HBlock
     /// <summary>The table starts a new page (a page break set in Excel).</summary>
     public bool PageBreakBefore { get; set; }
 
+    /// <summary>
+    /// The table takes no more height than its rows (fixed layouts: OFD, whose next paragraph has its own distance).
+    /// In HWPX it gets no 5 mm space under it and the paragraph holding it no empty line of its own, so a full page
+    /// does not run over.
+    /// </summary>
+    public bool Tight { get; set; }
+
     public List<HBlock> Caption { get; } = [];
 }
 
@@ -152,6 +159,8 @@ internal sealed class HCell
     public HVerticalAlign VerticalAlign { get; set; }
     public string? Fill { get; set; }
     public HBorders? Borders { get; set; }
+    /// <summary>Cell-specific padding; null inherits the table's padding.</summary>
+    public HInsets? CellMargin { get; set; }
     public List<HBlock> Blocks { get; } = [];
 }
 
@@ -191,10 +200,19 @@ internal readonly record struct HBorders(HBorder Left, HBorder Right, HBorder To
 
 internal abstract class HInline;
 
-internal sealed class HText(string text, HCharFormat format) : HInline
+internal class HText(string text, HCharFormat format) : HInline
 {
     public string Text { get; } = text;
     public HCharFormat Format { get; } = format;
+}
+
+/// <summary>
+/// An equation (from Word math): a 한글 equation object in HWPX. It is text too, its linear form ("(a)/(b)", "x^2"),
+/// which the writers without equations (HTML, EPUB, Markdown, plain text) write instead.
+/// </summary>
+internal sealed class HEquation(MathNode math, HCharFormat format) : HText(EquationScript.Linear(math), format)
+{
+    public MathNode Math { get; } = math;
 }
 
 internal sealed class HLineBreak(HCharFormat format) : HInline
@@ -335,6 +353,11 @@ internal readonly record struct HLineSpacing(HLineSpacingKind Kind, int Value);
 
 /// <summary>Paragraph formatting; null members keep the 한글 style's value.</summary>
 /// <param name="FirstLine">First line indent relative to <paramref name="Left"/>; negative = hanging indent.</param>
+/// <param name="RightToLeft">
+/// A right-to-left paragraph (Arabic, Hebrew): its lines start at the right. <paramref name="Align"/>,
+/// <paramref name="Left"/> and <paramref name="Right"/> then name the start and the end side, as Word's w:bidi
+/// paragraphs do (Left aligns to the right edge). Written to DOCX only; HWPX has no right-to-left paragraphs.
+/// </param>
 internal readonly record struct HParaFormat(
     HAlign? Align = null,
     int? Left = null,
@@ -346,7 +369,8 @@ internal readonly record struct HParaFormat(
     bool? KeepWithNext = null,
     bool? KeepLines = null,
     bool? WidowOrphan = null,
-    IReadOnlyList<HTabStop>? Tabs = null)
+    IReadOnlyList<HTabStop>? Tabs = null,
+    bool? RightToLeft = null)
 {
     public bool IsEmpty => this == default;
 
@@ -355,10 +379,10 @@ internal readonly record struct HParaFormat(
         Align == other.Align && Left == other.Left && Right == other.Right && FirstLine == other.FirstLine &&
         Before == other.Before && After == other.After && LineSpacing == other.LineSpacing &&
         KeepWithNext == other.KeepWithNext && KeepLines == other.KeepLines && WidowOrphan == other.WidowOrphan &&
-        (Tabs ?? []).SequenceEqual(other.Tabs ?? []);
+        RightToLeft == other.RightToLeft && (Tabs ?? []).SequenceEqual(other.Tabs ?? []);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Align, Left, Right, FirstLine, Before, After, LineSpacing, HashCode.Combine(KeepWithNext, KeepLines, WidowOrphan, Tabs?.Count ?? 0));
+        HashCode.Combine(Align, Left, Right, FirstLine, Before, After, LineSpacing, HashCode.Combine(KeepWithNext, KeepLines, WidowOrphan, RightToLeft, Tabs?.Count ?? 0));
 }
 
 internal enum HTabKind
@@ -375,7 +399,7 @@ internal readonly record struct HTabStop(int Position, HTabKind Kind, string Lea
 /// <summary>Character formatting; null members keep the 한글 style's value.</summary>
 /// <param name="Size">Font size in 1/100 pt.</param>
 /// <param name="Font">Font for Latin text.</param>
-/// <param name="EastAsianFont">Font for Hangul / Hanja / Japanese text.</param>
+/// <param name="EastAsianFont">Font for Hangul / Hanja / Japanese text and CJK punctuation (the symbol slot).</param>
 /// <param name="Color">Text colour "#RRGGBB".</param>
 /// <param name="Shade">Background (highlight) colour "#RRGGBB".</param>
 internal readonly record struct HCharFormat(

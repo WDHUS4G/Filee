@@ -40,7 +40,10 @@ public enum TriggerKind
 /// <summary>Where the gesture is active.</summary>
 public enum TriggerScope
 {
-    /// <summary>Only when the cursor is over the system file manager (Explorer / Finder) or the desktop.</summary>
+    /// <summary>
+    /// Only when the cursor is over a file manager (Explorer, Finder; on Windows also Files, Directory Opus and other
+    /// file managers) or the desktop.
+    /// </summary>
     FileManager,
     /// <summary>Everywhere, except excluded applications.</summary>
     Anywhere,

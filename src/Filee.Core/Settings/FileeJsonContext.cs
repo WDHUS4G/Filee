@@ -15,10 +15,12 @@ namespace Filee.Core.Settings;
     ReadCommentHandling = System.Text.Json.JsonCommentHandling.Skip,
     AllowTrailingCommas = true)]
 [JsonSerializable(typeof(AppSettings))]
+[JsonSerializable(typeof(ThemeStyle))]
 [JsonSerializable(typeof(List<Preset>))]
 [JsonSerializable(typeof(List<ToolbarProfile>))]
 [JsonSerializable(typeof(PresetBundle))]
 [JsonSerializable(typeof(List<HistoryEntry>))]
+[JsonSerializable(typeof(CustomTheme))]
 internal sealed partial class FileeJsonContext : JsonSerializerContext;
 
 /// <summary>File format used to import / export presets and profiles.</summary>

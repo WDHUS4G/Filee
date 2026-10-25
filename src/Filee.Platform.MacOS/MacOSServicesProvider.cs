@@ -24,16 +24,19 @@ public static class MacOSServicesProvider
     // Kept alive for as long as Objective-C may call it.
     private static readonly ServiceMethod Method = ConvertFiles;
     private static Action<IReadOnlyList<string>>? _handler;
+    private static Action<IReadOnlyList<string>>? _nothingUsable;
     private static nint _provider;
 
     /// <summary>
     /// Answers the service from now on; <paramref name="handler"/> gets the files (on the main thread). Call it on the
-    /// main thread early at start: a service picked while Filee wasn't running is delivered once this is set.
+    /// main thread early at start: a service picked while Filee wasn't running is delivered once this is set. When the
+    /// pasteboard names no existing file, <paramref name="nothingUsable"/> gets the types it offered instead.
     /// </summary>
     [SupportedOSPlatform("macos")]
-    public static void Register(Action<IReadOnlyList<string>> handler)
+    public static void Register(Action<IReadOnlyList<string>> handler, Action<IReadOnlyList<string>>? nothingUsable = null)
     {
         _handler = handler;
+        _nothingUsable = nothingUsable;
         if (_provider != 0)
             return;
         NativeLibrary.Load(AppKit);
@@ -57,6 +60,8 @@ public static class MacOSServicesProvider
             var files = FilesOn(pasteboard);
             if (files.Count > 0)
                 _handler?.Invoke(files);
+            else
+                _nothingUsable?.Invoke(Strings(Send(pasteboard, sel_registerName("types"))));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -64,8 +69,20 @@ public static class MacOSServicesProvider
         }
     }
 
-    /// <summary>The file paths on a pasteboard (Finder puts file URLs there).</summary>
-    private static List<string> FilesOn(nint pasteboard)
+    /// <summary>
+    /// The existing files and folders on a pasteboard. Finder puts file URLs there; other file managers (QSpace Pro,
+    /// issue #160) may put the older NSFilenamesPboardType array of paths, or only text: the first of these that names any.
+    /// </summary>
+    private static IReadOnlyList<string> FilesOn(nint pasteboard) => PasteboardPaths.FirstExisting(
+    [
+        () => FileUrls(pasteboard),
+        () => Strings(Send(pasteboard, sel_registerName("propertyListForType:"), NSString(PasteboardPaths.FilenamesType))),
+        () => ItemStrings(pasteboard, PasteboardPaths.FileUrlType).Select(PasteboardPaths.FromFileUrl).OfType<string>(),
+        () => ItemStrings(pasteboard, PasteboardPaths.TextType).SelectMany(PasteboardPaths.FromText),
+    ], PasteboardPaths.Exists);
+
+    /// <summary>File URLs read as NSURL objects (AppKit resolves file reference URLs).</summary>
+    private static List<string> FileUrls(nint pasteboard)
     {
         var files = new List<string>();
         var classes = Send(objc_getClass("NSArray"), sel_registerName("arrayWithObject:"), objc_getClass("NSURL"));
@@ -84,6 +101,58 @@ public static class MacOSServicesProvider
         }
         return files;
     }
+
+    /// <summary>The value of <paramref name="type"/> as text on each pasteboard item that has it.</summary>
+    private static List<string> ItemStrings(nint pasteboard, string type)
+    {
+        var values = new List<string>();
+        var items = Send(pasteboard, sel_registerName("pasteboardItems"));
+        if (items == 0)
+            return values;
+        var name = NSString(type);
+        var count = Send(items, sel_registerName("count"));
+        for (nint index = 0; index < count; index++)
+        {
+            var item = Send(items, sel_registerName("objectAtIndex:"), index);
+            if (Utf8(Send(item, sel_registerName("stringForType:"), name)) is { Length: > 0 } value)
+                values.Add(value);
+        }
+        return values;
+    }
+
+    /// <summary>The strings in an NSArray (anything else in it is skipped); none for nil or any other object.</summary>
+    private static List<string> Strings(nint array)
+    {
+        var values = new List<string>();
+        if (array == 0 || !SendBool(array, sel_registerName("isKindOfClass:"), objc_getClass("NSArray")))
+            return values;
+        var stringClass = objc_getClass("NSString");
+        var count = Send(array, sel_registerName("count"));
+        for (nint index = 0; index < count; index++)
+        {
+            var value = Send(array, sel_registerName("objectAtIndex:"), index);
+            if (SendBool(value, sel_registerName("isKindOfClass:"), stringClass) && Utf8(value) is { } text)
+                values.Add(text);
+        }
+        return values;
+    }
+
+    /// <summary>An autoreleased NSString (the service method runs inside AppKit's autorelease pool).</summary>
+    private static nint NSString(string value)
+    {
+        var utf8 = Marshal.StringToCoTaskMemUTF8(value);
+        try
+        {
+            return Send(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), utf8);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(utf8);
+        }
+    }
+
+    private static string? Utf8(nint text) =>
+        text == 0 ? null : Marshal.PtrToStringUTF8(Send(text, sel_registerName("UTF8String")));
 
     [DllImport(ObjC)]
     private static extern nint objc_getClass([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
@@ -116,6 +185,10 @@ public static class MacOSServicesProvider
     [DllImport(ObjC, EntryPoint = "objc_msgSend")]
     [return: MarshalAs(UnmanagedType.I1)]
     private static extern bool SendBool(nint receiver, nint selector);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private static extern bool SendBool(nint receiver, nint selector, nint argument);
 
     [DllImport(AppKit)]
     private static extern void NSUpdateDynamicServices();

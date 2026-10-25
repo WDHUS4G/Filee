@@ -1,0 +1,79 @@
+<!--
+  Filee.Setup: Filee's own Windows installer and uninstaller (Filee-<version>-win-Setup.exe, uninstall.exe).
+  build/build-installer.ps1 publishes it as one self-contained, trimmed file (no .NET needed on the PC) and appends
+  the published app to it as a compressed payload (build/tools/make-setup.cs). The same program without a payload,
+  copied next to Filee.exe as uninstall.exe, is the uninstaller.
+  It shares the app's look (Styles/Soft.axaml, SoftPalette) and translations (Assets/i18n). It uses Windows' own UI
+  fonts instead of the app's embedded Noto fonts (37 MB): Setup is downloaded on every update.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>Filee.Setup</AssemblyName>
+    <RootNamespace>Filee.Setup</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\Filee.App\Assets\Icons\filee.ico</ApplicationIcon>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Kept trim- and AOT-safe (no reflection, compiled bindings, source-generated COM), so the publish can be
+         trimmed and could become Native AOT later. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Product>Filee Setup</Product>
+  </PropertyGroup>
+
+  <!-- build/build-installer.ps1: dotnet publish -c Release -r win-x64 -p:FileeSetupPublish=true -->
+  <PropertyGroup Condition="'$(FileeSetupPublish)' == 'true'">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <DebugType>none</DebugType>
+    <UseSystemResourceKeys>false</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+    <StackTraceSupport>true</StackTraceSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Filee.Platform.Windows\Filee.Platform.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <!-- LZMA for the payload (the engines use it already for downloads). -->
+    <PackageReference Include="SharpCompress" />
+  </ItemGroup>
+
+  <!-- Shared with the app: its look, icon and translations. -->
+  <ItemGroup>
+    <Compile Include="..\Filee.App\Services\SoftPalette.cs" Link="Shared\SoftPalette.cs" />
+    <Compile Include="..\Filee.App\Services\AppLanguages.cs" Link="Shared\AppLanguages.cs" />
+    <!-- The "What's new" slides on the progress card: the app's slideshow, its player and deck reader, and the media. -->
+    <Compile Include="..\Filee.App\Controls\AnimatedImage.cs" Link="Shared\AnimatedImage.cs" />
+    <Compile Include="..\Filee.App\Controls\AnimatedImageDecoder.cs" Link="Shared\AnimatedImageDecoder.cs" />
+    <Compile Include="..\Filee.App\Controls\SlideDeck.cs" Link="Shared\SlideDeck.cs" />
+    <Compile Include="..\Filee.App\Controls\SlideShow.cs" Link="Shared\SlideShow.cs" />
+    <AvaloniaResource Include="..\Filee.App\Assets\WhatsNew\**" Link="Assets\WhatsNew\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AvaloniaResource Include="..\Filee.App\Styles\Soft.axaml" Link="Styles\Soft.axaml" />
+    <AvaloniaResource Include="..\Filee.App\Assets\Icons\filee.ico" Link="Assets\Icons\filee.ico" />
+    <AvaloniaResource Include="..\Filee.App\Assets\Icons\filee.png" Link="Assets\Icons\filee.png" />
+    <EmbeddedResource Include="..\Filee.App\Assets\i18n\*.json" Link="i18n\%(Filename)%(Extension)" LogicalName="i18n.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Filee.Setup.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>RepositoryUrl</_Parameter1>
+      <_Parameter2>$(FileeRepositoryUrl)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

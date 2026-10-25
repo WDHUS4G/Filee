@@ -6,8 +6,9 @@ namespace Filee.App.Services;
 
 public sealed class FileLoggerProvider : ILoggerProvider
 {
+    // Shared by every provider: Program's early logger and AppHost's write to the same file.
+    private static readonly Lock WriteLock = new();
     private readonly string _directory;
-    private readonly object _lock = new();
 
     public FileLoggerProvider(string directory)
     {
@@ -16,7 +17,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
         foreach (var old in Directory.EnumerateFiles(directory, "filee-*.log")
                      .Where(f => File.GetLastWriteTime(f) < DateTime.Now.AddDays(-7)))
         {
-            try { File.Delete(old); } catch (IOException) { }
+            try { File.Delete(old); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 
@@ -26,13 +27,13 @@ public sealed class FileLoggerProvider : ILoggerProvider
 
     private void Write(string line)
     {
-        lock (_lock)
+        lock (WriteLock)
         {
             try
             {
                 File.AppendAllText(Path.Combine(_directory, $"filee-{DateTime.Now:yyyyMMdd}.log"), line + Environment.NewLine);
             }
-            catch (IOException) { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 

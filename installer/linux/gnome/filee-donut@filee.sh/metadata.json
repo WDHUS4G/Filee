@@ -1,0 +1,14 @@
+{
+  "uuid": "filee-donut@filee.sh",
+  "name": "Filee donut at the cursor",
+  "description": "Enables Filee drag gestures on GNOME Wayland without input-device permissions, and places its conversion menu at the pointer.",
+  "version": 2,
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50"
+  ]
+}

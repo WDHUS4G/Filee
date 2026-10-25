@@ -1,4 +1,5 @@
-// Markdown → HTML and plain text with Markdig (BSD-2-Clause), in-process: Markdown works without any optional engine.
+// Markdown → HTML/TXT and plain-text aliases → TXT, in-process without executing source scripts.
+// Markdown rendering uses Markdig (BSD-2-Clause) and works without any optional engine.
 // The HTML also serves as an intermediate step (Markdown → HTML → PDF / DOCX through LibreOffice), so local images
 // get absolute file URIs whenever the page is written away from the Markdown file.
 
@@ -14,15 +15,15 @@ using Markdig.Syntax.Inlines;
 
 namespace Filee.Engines.Text;
 
-/// <summary>Markdown to HTML and TXT without external programs.</summary>
+/// <summary>Markdown to HTML/TXT and plain text to UTF-8 TXT without external programs.</summary>
 public sealed class MarkdownConverter : IConverter
 {
     public string Id => "markdown";
-    public string DisplayName => "Markdown (built-in)";
+    public string DisplayName => "Text & Markdown (built-in)";
     public int MaxParallelism => 0;
 
     // Cheaper than Pandoc's Markdown edges, so the built-in path wins for HTML and TXT.
-    public IReadOnlyList<ConversionEdge> Edges { get; } = [new("md", "html", 4), new("md", "txt", 5)];
+    public IReadOnlyList<ConversionEdge> Edges { get; } = [new("md", "html", 4), new("md", "txt", 5), new("txt", "txt", 4)];
 
     public EngineStatus GetStatus() => EngineStatus.Available(version: EngineVersions.Library("Markdig", typeof(Markdown)));
 
@@ -37,7 +38,7 @@ public sealed class MarkdownConverter : IConverter
         var content = step.To switch
         {
             "html" => ToHtml(markdown, Path.GetFullPath(step.InputPath), output),
-            "txt" => Markdown.ToPlainText(markdown, MarkdownReader.Pipeline),
+            "txt" => step.From == "txt" ? markdown : Markdown.ToPlainText(markdown, MarkdownReader.Pipeline),
             _ => throw new NotSupportedException(step.To),
         };
         await File.WriteAllTextAsync(output, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: step.To == "txt"), cancellationToken);

@@ -11,6 +11,7 @@ public partial class LibreOfficeOptionsWindow : Window
     {
         InitializeComponent();
         Motion.Track(this);
+        UiZoom.Track(this);
     }
 
     private void OnClose(object? sender, RoutedEventArgs e) => Close();

@@ -16,8 +16,12 @@ namespace Filee.Engines.Media;
 /// <param name="Codec">FFmpeg's codec name (<c>h264</c>, <c>hevc</c>, …), null when unknown.</param>
 /// <param name="PixelFormat">FFmpeg's pixel format (<c>yuv420p</c>, <c>yuv420p10le</c>, …), null when unknown.</param>
 /// <param name="Color">Colour primaries, transfer and matrix as FFmpeg names them (<c>bt2020</c>, <c>smpte2084</c>, …).</param>
+/// <param name="HeaderHash">
+/// A hash of the codec's setup data (H.264 / HEVC parameter sets), equal only for streams a decoder reads with the same
+/// setup; null when the file has none.
+/// </param>
 internal sealed record VideoStreamInfo(int Width, int Height, double SampleAspect, int Rotation, double FrameRate,
-    string? Codec = null, string? PixelFormat = null, VideoColor? Color = null)
+    string? Codec = null, string? PixelFormat = null, VideoColor? Color = null, string? HeaderHash = null)
 {
     /// <summary>
     /// True for more than 8 bits per sample (yuv420p10le, p010le, yuv422p12le, …): phones' HDR video, ProRes, 10-bit
@@ -71,9 +75,19 @@ internal sealed record AudioStreamInfo(int Channels, int SampleRate, string? Cod
 /// <param name="Audio">First audio stream, if any.</param>
 /// <param name="CoverStreamIndex">Index of an embedded cover picture (JPEG or PNG) such as album art, if any.</param>
 /// <param name="SubtitleStreams">Every subtitle stream in file order, null when there is none.</param>
+/// <param name="RawStream">
+/// A bare H.264 / H.265 stream with no container (a camera's .h264 / .h265): its frames carry no timestamps, so it is
+/// always encoded, never copied into a container.
+/// </param>
+/// <param name="HasAttachments">The file carries attachments (an MKV's subtitle fonts).</param>
+/// <param name="AudioStreams">Every audio stream in file order (languages, commentary), null for none or only one.</param>
 internal sealed record MediaInfo(TimeSpan? Duration, VideoStreamInfo? Video, AudioStreamInfo? Audio, int? CoverStreamIndex,
-    IReadOnlyList<SubtitleStreamInfo>? SubtitleStreams = null)
+    IReadOnlyList<SubtitleStreamInfo>? SubtitleStreams = null, bool RawStream = false, bool HasAttachments = false,
+    IReadOnlyList<AudioStreamInfo>? AudioStreams = null)
 {
+    /// <summary>Every audio stream, in file order: <see cref="Audio"/> first.</summary>
+    public IReadOnlyList<AudioStreamInfo> AudioTracks => AudioStreams ?? (Audio is null ? [] : [Audio]);
+
     /// <summary>Every subtitle stream, in file order.</summary>
     public IReadOnlyList<SubtitleStreamInfo> Subtitles => SubtitleStreams ?? [];
 
@@ -83,7 +97,7 @@ internal sealed record MediaInfo(TimeSpan? Duration, VideoStreamInfo? Video, Aud
     public static async Task<MediaInfo> ProbeAsync(string ffprobe, string input, CancellationToken cancellationToken)
     {
         var result = await ProcessRunner.RunAsync(ffprobe,
-            ["-hide_banner", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", input],
+            ["-hide_banner", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_data_hash", "MD5", input],
             ProbeTimeout, cancellationToken);
         if (result.ExitCode != 0)
         {
@@ -103,6 +117,8 @@ internal sealed record MediaInfo(TimeSpan? Duration, VideoStreamInfo? Video, Aud
         AudioStreamInfo? audio = null;
         int? cover = null;
         List<SubtitleStreamInfo> subtitles = [];
+        List<AudioStreamInfo> audios = [];
+        var attachments = false;
         double longestStream = 0;
         if (root.TryGetProperty("streams", out var streams) && streams.ValueKind == JsonValueKind.Array)
         {
@@ -125,11 +141,16 @@ internal sealed record MediaInfo(TimeSpan? Duration, VideoStreamInfo? Video, Aud
                             FrameRateOf(stream),
                             Text(stream, "codec_name"),
                             Text(stream, "pix_fmt"),
-                            ColorOf(stream));
+                            ColorOf(stream),
+                            Text(stream, "extradata_hash"));
                         break;
-                    case "audio" when audio is null:
-                        audio = new AudioStreamInfo((int)Number(stream, "channels"), (int)Number(stream, "sample_rate"),
-                            Text(stream, "codec_name"));
+                    case "audio":
+                        audios.Add(new AudioStreamInfo((int)Number(stream, "channels"), (int)Number(stream, "sample_rate"),
+                            Text(stream, "codec_name")));
+                        audio ??= audios[0];
+                        break;
+                    case "attachment":
+                        attachments = true;
                         break;
                     case "subtitle":
                         subtitles.Add(new SubtitleStreamInfo((int)Number(stream, "index"), Text(stream, "codec_name"),
@@ -142,8 +163,9 @@ internal sealed record MediaInfo(TimeSpan? Duration, VideoStreamInfo? Video, Aud
         var seconds = root.TryGetProperty("format", out var format) ? Number(format, "duration") : 0;
         if (seconds <= 0)
             seconds = longestStream;
+        var raw = root.TryGetProperty("format", out var container) && Text(container, "format_name") is "h264" or "hevc";
         return new MediaInfo(seconds > 0 ? TimeSpan.FromSeconds(seconds) : null, video, audio, cover,
-            subtitles.Count > 0 ? subtitles : null);
+            subtitles.Count > 0 ? subtitles : null, raw, attachments, audios.Count > 1 ? audios : null);
     }
 
     /// <summary>The colour tags of a video stream; null when it has none ("unknown" counts as none).</summary>

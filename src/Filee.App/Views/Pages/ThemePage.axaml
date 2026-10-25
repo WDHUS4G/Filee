@@ -2,78 +2,316 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Filee.App.ViewModels.Pages"
              xmlns:c="using:Filee.App.Controls"
+             xmlns:settings="using:Filee.Core.Settings"
              x:Class="Filee.App.Views.Pages.ThemePage"
              x:DataType="vm:ThemePageViewModel">
-  <Grid ColumnDefinitions="*,20,340" RowDefinitions="Auto,*">
-    <TextBlock Grid.ColumnSpan="3" Classes="h1" Text="{DynamicResource theme.title}" Margin="0,0,0,18" />
+  <UserControl.Styles>
+    <Style Selector="Button.choice-card">
+      <Setter Property="CornerRadius" Value="{DynamicResource SoftRadius}" />
+      <Setter Property="Padding" Value="14,10" />
+      <Setter Property="MinHeight" Value="68" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" Easing="{StaticResource SoftEase}" />
+          <BrushTransition Property="Background" Duration="0:0:0.18" />
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.choice-card:pointerover">
+      <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentSoftBrush}" />
+    </Style>
+    <Style Selector="Button.choice-card.selected">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="Button.choice-card TextBlock.choice-title">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.choice-card.selected TextBlock.choice-title">
+      <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="Button.choice-card TextBlock.choice-desc">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="LineHeight" Value="17" />
+    </Style>
+    <Style Selector="Button.preset-pill">
+      <Setter Property="CornerRadius" Value="{DynamicResource SoftRadiusPill}" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" Easing="{StaticResource SoftEase}" />
+          <BrushTransition Property="Background" Duration="0:0:0.18" />
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.preset-pill:pointerover">
+      <Setter Property="RenderTransform" Value="scale(1.03)" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Button.preset-pill:pressed">
+      <Setter Property="RenderTransform" Value="scale(0.96)" />
+    </Style>
+    <Style Selector=":is(TopLevel).reduced-motion Button.choice-card,
+                   :is(TopLevel).reduced-motion Button.preset-pill">
+      <Setter Property="Transitions" Value="{x:Null}" />
+      <Setter Property="RenderTransform" Value="none" />
+    </Style>
+    <Style Selector=":is(TopLevel).reduced-motion Button.choice-card:pointerover,
+                   :is(TopLevel).reduced-motion Button.preset-pill:pointerover,
+                   :is(TopLevel).reduced-motion Button.preset-pill:pressed">
+      <Setter Property="RenderTransform" Value="none" />
+    </Style>
+  </UserControl.Styles>
 
-    <StackPanel Grid.Row="1" Spacing="16">
-      <Border Classes="card">
-        <StackPanel Spacing="8">
-          <TextBlock Classes="label" Text="{DynamicResource theme.mode}" />
-          <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" MinWidth="220" />
-        </StackPanel>
-      </Border>
+  <ScrollViewer x:Name="EditorScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+    <Grid ColumnDefinitions="*,20,340" RowDefinitions="Auto,*" MinWidth="700" Width="{Binding #EditorScroller.Viewport.Width}" HorizontalAlignment="Left">
+      <TextBlock Grid.ColumnSpan="3" Classes="h1" Text="{DynamicResource theme.title}" Margin="0,0,0,18" />
 
-      <Border Classes="card">
-        <StackPanel Spacing="10">
-          <TextBlock Classes="label" Text="{DynamicResource theme.accent}" />
-          <ItemsControl ItemsSource="{Binding Swatches}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <WrapPanel />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="Color">
-                <Button Width="34" Height="34" Margin="0,0,8,8" CornerRadius="999" Padding="0"
-                        Command="{Binding $parent[ItemsControl].((vm:ThemePageViewModel)DataContext).PickSwatchCommand}"
-                        CommandParameter="{Binding}">
-                  <Button.Background>
-                    <SolidColorBrush Color="{Binding}" />
-                  </Button.Background>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <Border Width="34" Height="34" CornerRadius="999" Background="{Binding AccentBrush}" />
-            <TextBlock Classes="label" VerticalAlignment="Center" Text="{DynamicResource theme.custom_color}" Margin="0" />
-            <TextBox Text="{Binding AccentHex}" Width="120" PlaceholderText="#7F77DD" />
+      <StackPanel Grid.Row="1" Spacing="16">
+        <!-- Theme Style: Filee Soft vs Material You -->
+        <Border Classes="card">
+          <StackPanel Spacing="12">
+            <DockPanel>
+              <Border DockPanel.Dock="Right" CornerRadius="{DynamicResource SoftRadiusPill}" Background="{DynamicResource AccentSoftBrush}" Padding="8,2"
+                      IsVisible="{Binding IsMaterialYou}">
+                <TextBlock Text="{DynamicResource theme.style.m3_badge}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentStrongBrush}" />
+              </Border>
+              <TextBlock Classes="label" Text="{DynamicResource theme.style}" VerticalAlignment="Center" Margin="0" />
+            </DockPanel>
+
+            <Grid ColumnDefinitions="*,12,*" RowDefinitions="Auto">
+              <Button Classes="choice-card"
+                      Classes.selected="{Binding !IsMaterialYou}"
+                      Command="{Binding SetStyleCommand}"
+                      CommandParameter="{x:Static settings:ThemeStyle.Soft}"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                      VerticalAlignment="Stretch" VerticalContentAlignment="Stretch">
+                <StackPanel Spacing="6" VerticalAlignment="Top">
+                  <TextBlock Classes="choice-title" Text="{DynamicResource theme.style.Soft}" />
+                  <TextBlock Classes="choice-desc" Text="{DynamicResource theme.style.soft_hint}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Button>
+
+              <Button Grid.Column="2"
+                      Classes="choice-card"
+                      Classes.selected="{Binding IsMaterialYou}"
+                      Command="{Binding SetStyleCommand}"
+                      CommandParameter="{x:Static settings:ThemeStyle.MaterialYou}"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                      VerticalAlignment="Stretch" VerticalContentAlignment="Stretch">
+                <StackPanel Spacing="6" VerticalAlignment="Top">
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock Classes="choice-title" Text="{DynamicResource theme.style.MaterialYou}" />
+                    <Border CornerRadius="{DynamicResource SoftRadiusPill}" Background="{DynamicResource AccentBrush}" Padding="6,1">
+                      <TextBlock Text="{DynamicResource theme.style.m3_tag}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource OnAccentBrush}" />
+                    </Border>
+                  </StackPanel>
+                  <TextBlock Classes="choice-desc" Text="{DynamicResource theme.style.material_you_hint}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Button>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- Appearance Mode: System / Light / Dark -->
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="label" Text="{DynamicResource theme.mode}" />
+            <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" MinWidth="220" AutomationProperties.Name="{DynamicResource theme.mode}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Accent Colour & Curated Presets -->
+        <Border Classes="card">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="label" Text="{DynamicResource theme.accent}" />
+
+            <!-- Vibrant / Classic Swatches -->
+            <TextBlock Classes="caption" Text="{DynamicResource theme.presets_vibrant}" FontWeight="SemiBold" Margin="0,2,0,0" />
+            <ListBox x:Name="AccentSwatches" ItemsSource="{Binding Swatches}" SelectedItem="{Binding Accent, Mode=TwoWay}"
+                     Background="Transparent" BorderThickness="0" Padding="0"
+                     AutomationProperties.Name="{DynamicResource theme.accent}">
+              <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                  <Setter Property="Padding" Value="4" />
+                  <Setter Property="Margin" Value="0,0,4,4" />
+                  <Setter Property="Template">
+                    <ControlTemplate>
+                      <Border x:Name="SelectionRing" CornerRadius="999" BorderThickness="2" BorderBrush="Transparent" Padding="3">
+                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+                      </Border>
+                    </ControlTemplate>
+                  </Setter>
+                </Style>
+                <Style Selector="ListBoxItem:selected /template/ Border#SelectionRing">
+                  <Setter Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+                </Style>
+                <Style Selector="ListBoxItem:focus-visible /template/ Border#SelectionRing">
+                  <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                </Style>
+              </ListBox.Styles>
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="Color">
+                  <Border Width="34" Height="34" CornerRadius="999" ToolTip.Tip="{Binding}" AutomationProperties.Name="{Binding}">
+                    <Border.Background>
+                      <SolidColorBrush Color="{Binding}" />
+                    </Border.Background>
+                    <PathIcon Data="{StaticResource Icon.Check}" Width="16" Height="16"
+                              Foreground="{DynamicResource OnAccentBrush}"
+                              IsVisible="{Binding $parent[ListBoxItem].IsSelected}" />
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- Custom Colour Picker & Hex -->
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2,0,0">
+              <TextBlock Classes="label" VerticalAlignment="Center" Text="{DynamicResource theme.custom_color}" Margin="0" />
+              <ColorPicker x:Name="AccentPicker" Color="{Binding Accent, Mode=TwoWay}" IsAlphaEnabled="False"
+                           MinHeight="40" MinWidth="90"
+                           IsAlphaVisible="False" IsColorSpectrumVisible="True" IsColorPaletteVisible="False"
+                           IsColorComponentsVisible="False" IsColorModelVisible="False" IsColorPreviewVisible="True"
+                           FlowDirection="LeftToRight" AutomationProperties.Name="{DynamicResource theme.custom_color}" />
+              <TextBox Text="{Binding AccentHex}" Width="120" PlaceholderText="#7F77DD" FlowDirection="LeftToRight"
+                       AutomationProperties.Name="{DynamicResource theme.custom_color}" />
+            </StackPanel>
+
+            <!-- Curated Pastel Presets -->
+            <TextBlock Classes="caption" Text="{DynamicResource theme.presets_pastel}" FontWeight="SemiBold" Margin="0,4,0,0" />
+            <ItemsControl ItemsSource="{Binding PastelPresets}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <UniformGrid Columns="2" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ThemePageViewModel+PresetItem">
+                  <Button Classes="preset-pill" Margin="0,0,6,6"
+                          Command="{Binding $parent[ItemsControl].((vm:ThemePageViewModel)DataContext).PickPresetCommand}"
+                          CommandParameter="{Binding}">
+                    <DockPanel>
+                      <Border DockPanel.Dock="Left" Width="18" Height="18" CornerRadius="999" Margin="0,0,8,0"
+                              BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1">
+                        <Border.Background>
+                          <SolidColorBrush Color="{Binding Color}" />
+                        </Border.Background>
+                      </Border>
+                      <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontSize="12" FontWeight="Medium"
+                                 TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- Softness / Corner Radius -->
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" FontWeight="SemiBold" Text="{Binding CornerRadius, StringFormat={}{0:0}}" />
+              <TextBlock Classes="label" Text="{DynamicResource theme.corner_radius}" />
+            </DockPanel>
+            <Slider Minimum="0" Maximum="28" Value="{Binding CornerRadius}" TickFrequency="1" IsSnapToTickEnabled="True" AutomationProperties.Name="{DynamicResource theme.corner_radius}" />
+          </StackPanel>
+        </Border>
+
+        <!-- The donut toolbar's opacity: the same setting as Donut toolbar → Appearance → Opacity. -->
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" FontWeight="SemiBold" Text="{Binding DonutOpacity, StringFormat={}{0:0}%}" />
+              <TextBlock Classes="label" Text="{DynamicResource theme.donut_opacity}" />
+            </DockPanel>
+            <Slider x:Name="DonutOpacitySlider" Minimum="10" Maximum="100" Value="{Binding DonutOpacity}"
+                    TickFrequency="1" IsSnapToTickEnabled="True" AutomationProperties.Name="{DynamicResource theme.donut_opacity}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Reduced Motion -->
+        <Border Classes="card">
+          <StackPanel Spacing="4">
+            <CheckBox Content="{DynamicResource theme.reduce_motion}" IsChecked="{Binding ReduceMotion}" FontWeight="SemiBold" />
+            <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource theme.reduce_motion_hint}" Margin="28,0,0,0" />
+          </StackPanel>
+        </Border>
+        <!-- Window size: the zoom of every Filee window (UiZoom), saved by itself. Ctrl + wheel and the keys change it too. -->
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="label" Text="{DynamicResource theme.window_size}" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button x:Name="ZoomOutButton" Classes="icon" Command="{Binding ZoomOutCommand}"
+                      ToolTip.Tip="{DynamicResource theme.window_size_smaller}"
+                      AutomationProperties.Name="{DynamicResource theme.window_size_smaller}">
+                <PathIcon Width="14" Height="14" Data="{StaticResource Icon.Minus}" />
+              </Button>
+              <TextBlock x:Name="WindowSizeText" MinWidth="52" TextAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"
+                         FlowDirection="LeftToRight" Text="{Binding WindowSize, StringFormat={}{0:0}%}" />
+              <Button x:Name="ZoomInButton" Classes="icon" Command="{Binding ZoomInCommand}"
+                      ToolTip.Tip="{DynamicResource theme.window_size_larger}"
+                      AutomationProperties.Name="{DynamicResource theme.window_size_larger}">
+                <PathIcon Width="14" Height="14" Data="{StaticResource Icon.Plus}" />
+              </Button>
+              <Button x:Name="ResetZoomButton" Margin="8,0,0,0" Command="{Binding ResetZoomCommand}"
+                      Content="{DynamicResource theme.window_size_reset}" />
+            </StackPanel>
+            <TextBlock Classes="caption" TextWrapping="Wrap" Text="{Binding WindowSizeHint}" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- Live preview -->
+      <Border Grid.Row="1" Grid.Column="2" Classes="card" VerticalAlignment="Top">
+        <StackPanel Spacing="14">
+          <TextBlock Classes="label" Text="{DynamicResource theme.preview}" />
+          <!-- The donut over a stand-in for the desktop, so its opacity shows. -->
+          <Border Background="{Binding PreviewBackdrop}" CornerRadius="{DynamicResource SoftRadiusLarge}" Padding="0,10" ClipToBounds="True">
+            <c:DonutMenu x:Name="PreviewDonut" Items="{Binding PreviewItems}" OuterRadius="120" CenterTitle="JPG × 3" HorizontalAlignment="Center"
+                         SliceOpacity="{Binding DonutOpacity, Converter={x:Static vm:ToolbarConverters.Percent}}" />
+          </Border>
+          <!-- Sample buttons are decorative; the switch below is an isolated interactive demo. -->
+          <StackPanel Spacing="14">
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+                        IsHitTestVisible="False" Focusable="False">
+              <Button x:Name="PreviewPrimaryButton" Classes="accent" Content="{DynamicResource common.save}"
+                      Focusable="False" IsTabStop="False" />
+              <Button x:Name="PreviewSecondaryButton" Content="{DynamicResource common.cancel}"
+                      Focusable="False" IsTabStop="False" />
+            </StackPanel>
+            <!-- On / Off come from the ToggleSwitch style, in the user's language. -->
+            <ToggleSwitch x:Name="PreviewToggle"
+                          IsChecked="False"
+                          HorizontalAlignment="Center"
+                          AutomationProperties.Name="{DynamicResource theme.preview_toggle}"
+                          AutomationProperties.HelpText="{DynamicResource theme.preview_toggle_hint}" />
           </StackPanel>
         </StackPanel>
       </Border>
-
-      <Border Classes="card">
-        <StackPanel Spacing="8">
-          <DockPanel>
-            <TextBlock DockPanel.Dock="Right" FontWeight="SemiBold" Text="{Binding CornerRadius, StringFormat={}{0:0}}" />
-            <TextBlock Classes="label" Text="{DynamicResource theme.corner_radius}" />
-          </DockPanel>
-          <Slider Minimum="0" Maximum="28" Value="{Binding CornerRadius}" TickFrequency="1" IsSnapToTickEnabled="True" />
-        </StackPanel>
-      </Border>
-
-      <Border Classes="card">
-        <StackPanel Spacing="4">
-          <CheckBox Content="{DynamicResource theme.reduce_motion}" IsChecked="{Binding ReduceMotion}" FontWeight="SemiBold" />
-          <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource theme.reduce_motion_hint}" Margin="28,0,0,0" />
-        </StackPanel>
-      </Border>
-    </StackPanel>
-
-    <!-- Live preview -->
-    <Border Grid.Row="1" Grid.Column="2" Classes="card" VerticalAlignment="Top">
-      <StackPanel Spacing="14">
-        <TextBlock Classes="label" Text="{DynamicResource theme.preview}" />
-        <c:DonutMenu x:Name="PreviewDonut" Items="{Binding PreviewItems}" OuterRadius="120" CenterTitle="JPG × 3" HorizontalAlignment="Center" />
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
-          <Button Classes="accent" Content="{DynamicResource common.save}" />
-          <Button Content="{DynamicResource common.cancel}" />
-        </StackPanel>
-        <Slider Value="60" Maximum="100" />
-        <ToggleSwitch IsChecked="True" HorizontalAlignment="Center" />
-      </StackPanel>
-    </Border>
-  </Grid>
+    </Grid>
+  </ScrollViewer>
 </UserControl>

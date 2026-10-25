@@ -3,6 +3,9 @@
 // AZW3, LIT, LRF, PDB, PML, RB, SNB and TCR. EPUB is the hub: the built-in engine handles every other step, and
 // calibre's edges cost more so built-in routes always win where they exist.
 //
+// calibre also makes PDFs of e-books, much faster than the built-in route (HWPX writer → rhwp) for long books (#127).
+// That route stays the default; calibre's PDF edges win once the user ranks calibre above the HWPX writer.
+//
 // Each run gets its own calibre configuration, cache and temp folders inside the job's work directory, so Filee
 // never reads or changes the settings of a calibre the user may have installed.
 
@@ -24,6 +27,16 @@ public sealed partial class CalibreConverter : IConverter
     /// <summary>Formats only calibre writes.</summary>
     internal static readonly string[] Outputs = ["mobi", "azw3", "lit", "lrf", "pdb", "pml", "rb", "snb", "tcr"];
 
+    /// <summary>Books calibre makes PDFs of: the ones the built-in engines read too, and <see cref="Inputs"/>.</summary>
+    internal static readonly string[] PdfInputs = ["epub", "mobi", "azw3", "azw", "prc", "fb2", "htmlz", "txtz", .. Inputs];
+
+    /// <summary>
+    /// Cost of e-book → PDF. The built-in route costs 31 in the default engine order (HWPX writer 10 + 8, rhwp 10 + 3)
+    /// and calibre ranks last (+ 9), so 23 loses by one. Ranked above the HWPX writer, calibre costs at most 23 + 8
+    /// and the built-in route at least 32 (the HWPX writer moves down to + 9).
+    /// </summary>
+    internal const int PdfCost = 23;
+
     private string? _executable;
 
     public string Id => "calibre";
@@ -36,6 +49,7 @@ public sealed partial class CalibreConverter : IConverter
     [
         .. Inputs.Select(from => new ConversionEdge(from, "epub", 20)),
         .. Outputs.Select(to => new ConversionEdge("epub", to, 20)),
+        .. PdfInputs.Select(from => new ConversionEdge(from, "pdf", PdfCost)),
     ];
 
     public EngineStatus GetStatus()
@@ -68,7 +82,7 @@ public sealed partial class CalibreConverter : IConverter
             ["PYTHONIOENCODING"] = "utf-8",
         };
         progress?.Report(0.02);
-        var result = await ProcessRunner.RunAsync(executable, [input, temp], Timeout, cancellationToken,
+        var result = await ProcessRunner.RunAsync(executable, [input, temp, .. OutputOptions(step.To)], Timeout, cancellationToken,
             workingDirectory: work, environment: environment, onOutput: line => ReportProgress(line, progress));
         if (result.ExitCode != 0 || !File.Exists(temp))
             throw new InvalidOperationException($"Calibre failed (exit {result.ExitCode}). {LastLines(result.StandardError.Trim().Length > 0 ? result.StandardError : result.StandardOutput)}");
@@ -80,6 +94,13 @@ public sealed partial class CalibreConverter : IConverter
         progress?.Report(1);
         return [output];
     }
+
+    /// <summary>
+    /// ebook-convert's options for a target. PDF: A4 like the built-in route (calibre's default is Letter) and page
+    /// numbers; margins (72 pt) and font sizes stay calibre's.
+    /// </summary>
+    internal static string[] OutputOptions(string to) =>
+        to == "pdf" ? ["--paper-size", "a4", "--pdf-page-numbers"] : [];
 
     /// <summary>ebook-convert prints "34% Running transforms on e-book..." while it works.</summary>
     private static void ReportProgress(string line, IProgress<double>? progress)

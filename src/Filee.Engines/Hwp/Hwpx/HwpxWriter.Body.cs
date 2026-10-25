@@ -223,6 +223,10 @@ internal sealed partial class HwpxWriter
         {
             switch (inline)
             {
+                case HEquation equation:
+                    runs.Control(CharPr(charPrBase, equation.Format, link), Equation(equation, charPrBase), isObject: true);
+                    _plainText.Append(equation.Text);
+                    break;
                 case HText text:
                     runs.Text(CharPr(charPrBase, text.Format, link), Escape(text.Text));
                     _plainText.Append(text.Text);
@@ -296,7 +300,7 @@ internal sealed partial class HwpxWriter
             _ => "LEFT",
         };
         sb.Append($"<hp:pos treatAsChar=\"0\" affectLSpacing=\"0\" flowWithText=\"1\" allowOverlap=\"0\" holdAnchorAndSO=\"0\" vertRelTo=\"PARA\" horzRelTo=\"COLUMN\" vertAlign=\"TOP\" horzAlign=\"{horizontalAlign}\" vertOffset=\"0\" horzOffset=\"{(table.Align == HAlign.Left ? table.Indent : 0)}\"/>");
-        sb.Append("<hp:outMargin left=\"0\" right=\"0\" top=\"0\" bottom=\"1417\"/>");
+        sb.Append($"<hp:outMargin left=\"0\" right=\"0\" top=\"0\" bottom=\"{(table.Tight ? 0 : 1417)}\"/>");
         sb.Append($"<hp:inMargin left=\"{margin.Left}\" right=\"{margin.Right}\" top=\"{margin.Top}\" bottom=\"{margin.Bottom}\"/>");
 
         var outerWidth = _width;
@@ -305,6 +309,7 @@ internal sealed partial class HwpxWriter
             sb.Append("<hp:tr>");
             foreach (var (cell, column) in placed[r])
             {
+                var cellMargin = cell.CellMargin ?? margin;
                 var width = 0;
                 for (var i = column; i < column + cell.ColSpan && i < widths.Length; i++)
                     width += widths[i];
@@ -312,20 +317,20 @@ internal sealed partial class HwpxWriter
                 for (var i = r; i < r + cell.RowSpan && i < rowHeights.Length; i++)
                     height += rowHeights[i];
 
-                _width = Math.Max(1000, width - margin.Left - margin.Right);
+                _width = Math.Max(1000, width - cellMargin.Left - cellMargin.Right);
                 var verticalAlign = cell.VerticalAlign switch
                 {
                     HVerticalAlign.Center => "CENTER",
                     HVerticalAlign.Bottom => "BOTTOM",
                     _ => "TOP",
                 };
-                sb.Append($"<hp:tc name=\"\" header=\"{(r < headerRows ? 1 : 0)}\" hasMargin=\"0\" protect=\"0\" editable=\"0\" dirty=\"0\" borderFillIDRef=\"{BorderFillId(cell.Borders ?? tableBorders, cell.Fill)}\">");
+                sb.Append($"<hp:tc name=\"\" header=\"{(r < headerRows ? 1 : 0)}\" hasMargin=\"{(cell.CellMargin is not null ? 1 : 0)}\" protect=\"0\" editable=\"0\" dirty=\"0\" borderFillIDRef=\"{BorderFillId(cell.Borders ?? tableBorders, cell.Fill)}\">");
                 sb.Append(SubList(cell.Blocks, verticalAlign));
                 sb.Append($"<hp:cellAddr colAddr=\"{column}\" rowAddr=\"{r}\"/>");
                 sb.Append($"<hp:cellSpan colSpan=\"{cell.ColSpan}\" rowSpan=\"{cell.RowSpan}\"/>");
                 // Like 한글 itself: a merged cell is as tall as all the rows it spans.
                 sb.Append($"<hp:cellSz width=\"{width}\" height=\"{height}\"/>");
-                sb.Append($"<hp:cellMargin left=\"{margin.Left}\" right=\"{margin.Right}\" top=\"{margin.Top}\" bottom=\"{margin.Bottom}\"/>");
+                sb.Append($"<hp:cellMargin left=\"{cellMargin.Left}\" right=\"{cellMargin.Right}\" top=\"{cellMargin.Top}\" bottom=\"{cellMargin.Bottom}\"/>");
                 sb.Append("</hp:tc>");
             }
             sb.Append("</hp:tr>");
@@ -333,9 +338,14 @@ internal sealed partial class HwpxWriter
         _width = outerWidth;
         sb.Append("</hp:tbl>");
 
+        // The paragraph holding the table has a text line under it; a tight table's is 1 pt with no spacing.
+        var (paraPrId, charPrId) = table.Tight
+            ? (ParaPr(_base.ParaPrId, new HParaFormat(Before: 0, After: 0, LineSpacing: new HLineSpacing(HLineSpacingKind.Percent, 100)), null),
+               CharPr(_base.CharPrId, new HCharFormat(Size: 100)))
+            : (_base.ParaPrId, _base.CharPrId);
         var runs = new RunBuilder();
-        runs.Control(_base.CharPrId, sb.ToString(), isObject: true);
-        var paragraph = $"<hp:p id=\"0\" paraPrIDRef=\"{_base.ParaPrId}\" styleIDRef=\"{_base.StyleId}\" pageBreak=\"{(table.PageBreakBefore ? 1 : 0)}\" columnBreak=\"0\" merged=\"0\">{leadingRun}{runs.Finish(_base.CharPrId, leadingRun is not null)}</hp:p>";
+        runs.Control(charPrId, sb.ToString(), isObject: true);
+        var paragraph = $"<hp:p id=\"0\" paraPrIDRef=\"{paraPrId}\" styleIDRef=\"{_base.StyleId}\" pageBreak=\"{(table.PageBreakBefore ? 1 : 0)}\" columnBreak=\"0\" merged=\"0\">{leadingRun}{runs.Finish(charPrId, leadingRun is not null)}</hp:p>";
         return paragraph + string.Concat(table.Caption.Select(b => Block(b)));
     }
 

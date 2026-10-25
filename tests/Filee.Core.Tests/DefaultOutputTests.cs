@@ -29,6 +29,19 @@ public class DefaultOutputTests
     }
 
     [Fact]
+    public void A_preset_on_default_uses_the_default_subfolder_for_every_file()
+    {
+        var settings = new AppSettings { DefaultOutput = { Location = OutputLocation.Subfolder, SubfolderName = "converted" } };
+        // Left over from when the preset had its own subfolder: the default location doesn't offer it.
+        var preset = new Preset { TargetFormat = "png", Output = { SubfolderOnlyForSeveralFiles = true } };
+
+        var used = settings.WithDefaultOutput(preset);
+
+        Assert.Equal(OutputLocation.Subfolder, used.Output.Location);
+        Assert.False(used.Output.SubfolderOnlyForSeveralFiles);
+    }
+
+    [Fact]
     public void Presets_on_default_save_to_the_folder_from_settings()
     {
         var settings = new AppSettings

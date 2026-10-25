@@ -37,6 +37,23 @@ public class ReleaseNotesTests
     }
 
     [Fact]
+    public void Every_language_filee_ships_has_its_lines_and_unknown_ones_are_skipped()
+    {
+        var note = ReleaseNotes.Parse("1.12.0", """
+            <!-- update
+            en: Polish translation
+            pl: Język polski
+            pt-BR: Português do Brasil
+            xx: from a newer Filee
+            -->
+            """);
+
+        Assert.Equal(["Język polski"], note.In("pl"));
+        Assert.Equal(["Português do Brasil"], note.In("pt-BR"));
+        Assert.Equal(["Polish translation"], note.In("xx")); // not a Filee language: English
+    }
+
+    [Fact]
     public void Releases_without_the_block_are_recommended_and_say_nothing()
     {
         var note = ReleaseNotes.Parse("1.9.0", "### New\n\n- Something");

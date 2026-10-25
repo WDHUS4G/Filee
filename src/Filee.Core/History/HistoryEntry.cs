@@ -24,7 +24,8 @@ public sealed class HistoryEntry
 
     /// <summary>
     /// The preset as the job ran it (save location already decided, a watch folder's output folder included), kept
-    /// when files failed: they can be converted again the same way even after the preset was changed or deleted.
+    /// when files failed: they can be converted again the same way even after the preset was changed or deleted. Its PDF
+    /// password is left out (<see cref="PdfOptions.PasswordLeftOut"/>).
     /// </summary>
     public Preset? Preset { get; set; }
 
@@ -47,7 +48,8 @@ public sealed class HistoryEntry
             Sources = [.. job.Sources],
             Outputs = [.. job.Outputs],
             Failures = failures,
-            Preset = failures.Count > 0 ? job.Preset.Clone() : null,
+            // history.json isn't the place for a PDF password: a retry takes it from the preset again.
+            Preset = failures.Count > 0 ? job.Preset.Clone().WithoutPassword(mark: true) : null,
         };
     }
 }

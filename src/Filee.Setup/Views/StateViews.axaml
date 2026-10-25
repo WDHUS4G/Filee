@@ -1,0 +1,136 @@
+<!-- The states of Setup's card. SetupWindow shows one at a time (crossfading); all bind the same SetupViewModel. -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:vm="using:Filee.Setup.ViewModels"
+                    xmlns:c="using:Filee.Setup.Controls"
+                    xmlns:shared="using:Filee.App.Controls">
+
+  <!-- Welcome: the logo assembling, one big button, Options. -->
+  <DataTemplate x:Key="Setup.Welcome" x:DataType="vm:SetupViewModel">
+    <Grid RowDefinitions="*,Auto">
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" MaxWidth="470" Margin="24,0">
+        <c:DonutLogo Width="96" Height="96" HorizontalAlignment="Center" Margin="0,0,0,10" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+          <TextBlock Classes="title" Text="Filee" />
+          <Border Classes="pill">
+            <TextBlock Text="{Binding Version}" />
+          </Border>
+        </StackPanel>
+        <TextBlock Classes="muted" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding WelcomeText}" />
+        <Button x:Name="PrimaryButton" Classes="big accent" HorizontalAlignment="Center" Margin="0,18,0,2"
+                Content="{Binding PrimaryText}" Command="{Binding InstallCommand}" IsDefault="True" />
+        <Button Classes="link" HorizontalAlignment="Center" Command="{Binding ToggleOptionsCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="{DynamicResource installer.options.title}" />
+            <Path Data="{DynamicResource Setup.ChevronUp}" Width="12" Height="8" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+      <TextBlock Grid.Row="1" Classes="caption" HorizontalAlignment="Center" Margin="24,0,24,16" TextWrapping="Wrap"
+                 TextAlignment="Center" Text="{DynamicResource installer.welcome.license}" />
+    </Grid>
+  </DataTemplate>
+
+  <!-- Installing (and uninstalling): the new version's "What's new" slides, one status line, a thin bar. -->
+  <DataTemplate x:Key="Setup.Progress" x:DataType="vm:SetupViewModel">
+    <Grid RowDefinitions="*,Auto" Margin="32,0,32,26">
+      <shared:SlideShow x:Name="Slides" VerticalAlignment="Center" MaxWidth="520" MediaWidth="304" MediaHeight="171"
+                        AutoAdvance="0:0:6" IsVisible="{Binding ShowShowcase}" />
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14" IsVisible="{Binding !ShowShowcase}">
+        <c:DonutLogo Width="84" Height="84" HorizontalAlignment="Center" />
+        <TextBlock Classes="heading" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding ProgressTitle}" />
+      </StackPanel>
+      <StackPanel Grid.Row="1" Spacing="10" Margin="0,8,0,0">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Right" Classes="caption" Margin="12,0,0,0" Text="{Binding Percent, StringFormat={}{0:0}%}" />
+          <TextBlock Classes="muted" TextTrimming="CharacterEllipsis" Text="{Binding StatusText}" />
+        </DockPanel>
+        <c:ShimmerBar x:Name="Bar" Value="{Binding Percent}" Track="{DynamicResource SurfaceAltBrush}" Fill="{DynamicResource AccentBrush}" />
+      </StackPanel>
+    </Grid>
+  </DataTemplate>
+
+  <!-- Done: the check mark bursts, "Launch Filee". -->
+  <DataTemplate x:Key="Setup.Done" x:DataType="vm:SetupViewModel">
+    <Grid RowDefinitions="*,Auto" Margin="32,0,32,24">
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" MaxWidth="500" Margin="0,0,0,12">
+        <c:CheckBurst Width="88" Height="88" HorizontalAlignment="Center" Fill="{DynamicResource AccentBrush}" Mark="{DynamicResource OnAccentBrush}" />
+        <TextBlock Classes="title" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding DoneTitle}" />
+        <TextBlock Classes="muted" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding DoneText}" />
+        <Border Classes="warning" Margin="0,4,0,0" IsVisible="{Binding WarningText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <ScrollViewer MaxHeight="84" HorizontalScrollBarVisibility="Disabled">
+            <SelectableTextBlock FontSize="12.5" TextWrapping="Wrap" Text="{Binding WarningText}" />
+          </ScrollViewer>
+        </Border>
+      </StackPanel>
+      <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+        <Button Classes="soft" Content="{DynamicResource common.close}" Command="{Binding CloseCommand}" />
+        <Button x:Name="PrimaryButton" Classes="big accent" Content="{DynamicResource installer.done.launch}"
+                Command="{Binding LaunchAndCloseCommand}" IsDefault="True" />
+      </StackPanel>
+    </Grid>
+  </DataTemplate>
+
+  <!-- Something went wrong: what, and the details to copy. -->
+  <DataTemplate x:Key="Setup.Failed" x:DataType="vm:SetupViewModel">
+    <Grid RowDefinitions="*,Auto" Margin="32,0,32,24">
+      <StackPanel VerticalAlignment="Center" Spacing="10" MaxWidth="520" HorizontalAlignment="Center">
+        <Border Width="64" Height="64" CornerRadius="32" HorizontalAlignment="Center" Background="{DynamicResource DangerBrush}">
+          <TextBlock Text="!" FontSize="34" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+        <TextBlock Classes="title" FontSize="22" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding ErrorTitle}" />
+        <ScrollViewer MaxHeight="120" HorizontalScrollBarVisibility="Disabled">
+          <SelectableTextBlock Classes="muted" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding ErrorText}" />
+        </ScrollViewer>
+        <TextBlock Classes="caption" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding LogText}" />
+      </StackPanel>
+      <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+        <Button Classes="soft" Command="{Binding CopyDetailsCommand}">
+          <Panel>
+            <TextBlock Text="{DynamicResource installer.error.copy}" IsVisible="{Binding !Copied}" />
+            <TextBlock Text="{DynamicResource installer.error.copied}" IsVisible="{Binding Copied}" />
+          </Panel>
+        </Button>
+        <Button x:Name="PrimaryButton" Classes="big accent" MinWidth="140" Content="{DynamicResource common.close}"
+                Command="{Binding CloseCommand}" IsDefault="True" />
+      </StackPanel>
+    </Grid>
+  </DataTemplate>
+
+  <!-- The uninstaller: keep or delete the settings. -->
+  <DataTemplate x:Key="Setup.Uninstall" x:DataType="vm:SetupViewModel">
+    <Grid RowDefinitions="*,Auto" Margin="32,0,32,24">
+      <StackPanel VerticalAlignment="Center" Spacing="8" MaxWidth="500" HorizontalAlignment="Center">
+        <c:DonutLogo Width="76" Height="76" HorizontalAlignment="Center" Margin="0,0,0,6" />
+        <TextBlock Classes="title" FontSize="22" TextAlignment="Center" TextWrapping="Wrap" Text="{DynamicResource installer.uninstall.title}" />
+        <TextBlock Classes="muted" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding UninstallText}" />
+        <Border Classes="card" Padding="14,10" Margin="0,8,0,0">
+          <StackPanel Spacing="2">
+            <CheckBox Classes="option" IsChecked="{Binding DeleteSettings}">
+              <TextBlock Text="{DynamicResource installer.uninstall.delete_settings}" />
+            </CheckBox>
+            <TextBlock Classes="caption" Margin="28,0,0,0" TextWrapping="Wrap" Text="{Binding SettingsText}" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+      <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+        <Button Classes="soft" Content="{DynamicResource common.cancel}" Command="{Binding CancelCommand}" />
+        <Button x:Name="PrimaryButton" Classes="big accent" MinWidth="160" Content="{DynamicResource installer.uninstall.button}"
+                Command="{Binding UninstallCommand}" IsDefault="True" />
+      </StackPanel>
+    </Grid>
+  </DataTemplate>
+
+  <!-- Uninstalled. -->
+  <DataTemplate x:Key="Setup.Uninstalled" x:DataType="vm:SetupViewModel">
+    <Grid RowDefinitions="*,Auto" Margin="32,0,32,24">
+      <StackPanel VerticalAlignment="Center" Spacing="8" MaxWidth="480" HorizontalAlignment="Center">
+        <c:CheckBurst Width="96" Height="96" HorizontalAlignment="Center" Fill="{DynamicResource AccentBrush}" Mark="{DynamicResource OnAccentBrush}" />
+        <TextBlock Classes="title" FontSize="22" TextAlignment="Center" TextWrapping="Wrap" Text="{DynamicResource installer.uninstall.done_title}" />
+        <TextBlock Classes="muted" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding UninstalledText}" />
+      </StackPanel>
+      <Button x:Name="PrimaryButton" Grid.Row="1" Classes="big accent" MinWidth="140" HorizontalAlignment="Center"
+              Content="{DynamicResource common.close}" Command="{Binding CloseCommand}" IsDefault="True" />
+    </Grid>
+  </DataTemplate>
+</ResourceDictionary>

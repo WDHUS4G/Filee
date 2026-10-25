@@ -1,0 +1,351 @@
+{
+  "_comment": "Tesseract language data (tessdata_fast 4.1.0, Apache-2.0), downloaded on demand when an OCR preset needs a language: pinned URL + SHA-256 per file. culture names the language in the UI.",
+  "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/{0}.traineddata",
+  "languages": {
+    "eng": {
+      "culture": "en",
+      "sha256": "7D4322BD2A7749724879683FC3912CB542F19906C83BCC1A52132556427170B2",
+      "size": 4113088
+    },
+    "deu": {
+      "culture": "de",
+      "sha256": "19D219BBB6672C869D20A9636C6816A81EB9A71796CB93EBE0CB1530E2CDB22D",
+      "size": 1525436
+    },
+    "fra": {
+      "culture": "fr",
+      "sha256": "CED037562E8C80C13122DECE28DD477D399AF80911A28791A66A63AC1E3445CA",
+      "size": 1130365
+    },
+    "spa": {
+      "culture": "es",
+      "sha256": "6F2E04D02774A18F01BED44B1111F2CD7F3BA7AC9DC4373CD3F898A40EA6B464",
+      "size": 2294433
+    },
+    "por": {
+      "culture": "pt",
+      "sha256": "C4932B937207A9514B7514D518B931A99938C02A28A5A5A553F8599ED58B7DEB",
+      "size": 1982756
+    },
+    "ita": {
+      "culture": "it",
+      "sha256": "B8F89E1E785118DAC4D51AE042C029A64EDB5C3EE42EF73027A6D412748D8827",
+      "size": 2701314
+    },
+    "nld": {
+      "culture": "nl",
+      "sha256": "CED0E5E046A84C908A6AA7ACCBEF9A232C4A5D9A8276691B81C6EE64D02963F6",
+      "size": 6050296
+    },
+    "pol": {
+      "culture": "pl",
+      "sha256": "C4476CDBC0E33D898D32345122B7BE1CBF85ACE15F920F06C7714756E1EF79B2",
+      "size": 4765518
+    },
+    "ces": {
+      "culture": "cs",
+      "sha256": "934BCAF97EF3348413263331131C9FA7F55F30DB333C711929C124FB635F7E1B",
+      "size": 3795684
+    },
+    "slk": {
+      "culture": "sk",
+      "sha256": "FBCC400A9C74C6A13D922FCB1211B655D1B165387B675ED75CD2DBD756B974A5",
+      "size": 4427661
+    },
+    "slv": {
+      "culture": "sl",
+      "sha256": "B937632C17CE5FDF20535D25FEEC044DA10A0C4C8234F4302D5606FD671CF60D",
+      "size": 3003829
+    },
+    "hrv": {
+      "culture": "hr",
+      "sha256": "9E515D9832CE259DBAB550B1CC6B998F8B929FAF2EDACAACA981B05ADB130571",
+      "size": 4103348
+    },
+    "srp": {
+      "culture": "sr-Cyrl",
+      "sha256": "AA41AE3D9CC705E60D398AB38A5C3CC8B772C0D420C7D4F0859BEB13D0E321B6",
+      "size": 2149931
+    },
+    "bos": {
+      "culture": "bs",
+      "sha256": "6CC8CC87CF1AFBFA6A41FEBB725DBADB14BED96A46685906440A6EB8A7892F04",
+      "size": 2498242
+    },
+    "ron": {
+      "culture": "ro",
+      "sha256": "9ADFDE6B51BA4B97EFD10EA37C3070FD3FC2BAD7815E81F5C3C198CD96216CC9",
+      "size": 2376323
+    },
+    "hun": {
+      "culture": "hu",
+      "sha256": "35067E7CFE102DCDC953F9A758FDFAA6296B17A1EE6D874EE780FA306430B9FB",
+      "size": 5296273
+    },
+    "bul": {
+      "culture": "bg",
+      "sha256": "AEBC9B0FCC8CFAF8A9F38A02BB7B85052BD850744696A2C11CF0081820E5B21E",
+      "size": 1675212
+    },
+    "ell": {
+      "culture": "el",
+      "sha256": "4FBA8A0B461038D51F1C20D043D4F2AC38C4E778F1B90830847F7BD8FA3BA726",
+      "size": 1419514
+    },
+    "rus": {
+      "culture": "ru",
+      "sha256": "E16E5E036CCE1D9EC2B00063CF8B54472625B9E14D893A169E2B0DEDEB4DF225",
+      "size": 3861738
+    },
+    "ukr": {
+      "culture": "uk",
+      "sha256": "D59E53E2BDED32F4445F124B4B00240FCAC7E8044C003AB822CCB94F0B3DB59B",
+      "size": 3825102
+    },
+    "bel": {
+      "culture": "be",
+      "sha256": "9C6668A0B202F3DCFE074B64620D108E1902CA7498A40B5A11B4A3DA6112D58F",
+      "size": 3692098
+    },
+    "tur": {
+      "culture": "tr",
+      "sha256": "7393381111E1152420FC4092CB44EEF4237580D21B92BF30D7D221AAD192C6B7",
+      "size": 4550554
+    },
+    "swe": {
+      "culture": "sv",
+      "sha256": "F7304988D41F833EFEBCC2D529DF54B1903ECEBBC3DA1FAABD19A0FDDD4FE586",
+      "size": 4167034
+    },
+    "dan": {
+      "culture": "da",
+      "sha256": "ACB1FD074487A31D1294FCDFD7D7C673467FFD8AEACB2CCD61EBCBF04EB4E2FA",
+      "size": 2580059
+    },
+    "nor": {
+      "culture": "nb",
+      "sha256": "0451EB4F8049AE78196806BF878A389A2F40F1386FE038568CF4441226BA6EF2",
+      "size": 3610079
+    },
+    "fin": {
+      "culture": "fi",
+      "sha256": "61A04CD62B507C3D9AE0E1CDA399E6715EBF49DEA9DF47897C8ACDCD3BD3E13C",
+      "size": 7865732
+    },
+    "isl": {
+      "culture": "is",
+      "sha256": "5EC828C363F3F0062C3CAF08216677CF5F3C0C981B05FAB445123A16B98F10A9",
+      "size": 2278973
+    },
+    "est": {
+      "culture": "et",
+      "sha256": "515D4A773682B286369511E83FE412BCFF16A92A886F99C761C1D760A7E30456",
+      "size": 4458101
+    },
+    "lav": {
+      "culture": "lv",
+      "sha256": "7D9EAF22254B381F18B806CD6CB647862A397A7221ADBCE3E22CC421793A8847",
+      "size": 2717247
+    },
+    "lit": {
+      "culture": "lt",
+      "sha256": "1E383DF5B055583BC01CB5764ECDF74C540753F2CB3F8205E7105361DA4BC989",
+      "size": 3154896
+    },
+    "cat": {
+      "culture": "ca",
+      "sha256": "250DB73CD5B380D2798581295DC12F20D0828CDB335A65D833D12DFDBF57117D",
+      "size": 1146012
+    },
+    "eus": {
+      "culture": "eu",
+      "sha256": "40E7418296C355D9FD9CA843D115C51E740089E576E887443E61704823CD6624",
+      "size": 5175921
+    },
+    "glg": {
+      "culture": "gl",
+      "sha256": "7947619C5544D86849F563BD737AD90DBEA9F5319FBD838C4747A7A1CD40B260",
+      "size": 2554555
+    },
+    "ara": {
+      "culture": "ar",
+      "sha256": "E3206D3DC87FD50C24A0FB9F01838615911D25168F4E64415244B67D2BB3E729",
+      "size": 1432056
+    },
+    "fas": {
+      "culture": "fa",
+      "sha256": "DB1C0A91208AFF00D3CF1ED2C1D23F76419AFD5F024688B4F71ADC3F2CE4A505",
+      "size": 431500
+    },
+    "urd": {
+      "culture": "ur",
+      "sha256": "62E8250CE2A994106E313A82E26A516A39E2CF159D0CE3C5B5008387FD0D555F",
+      "size": 1398718
+    },
+    "heb": {
+      "culture": "he",
+      "sha256": "11F9E43AB227F786352A50F75C94C2E9906F1BABA86D93276DA19DA7CE0904DB",
+      "size": 961404
+    },
+    "hin": {
+      "culture": "hi",
+      "sha256": "4C73FFC59D497C186B19D1E90F5D721D678EA6B2E277B719BEE4E2AF12271825",
+      "size": 1122751
+    },
+    "ben": {
+      "culture": "bn",
+      "sha256": "31163084C279AAEBD376216F0C3D5C17AD4B5FEE8DB49DAE79C20000B5DE5964",
+      "size": 855841
+    },
+    "mar": {
+      "culture": "mr",
+      "sha256": "0BA3F2D116972E72FE9E176BC84C38E81DFB6670F4ED1F7F6C8E16A27DA7CB61",
+      "size": 2118233
+    },
+    "guj": {
+      "culture": "gu",
+      "sha256": "FA69658614B4946A9AFAE8853D67E0689838803DFA3D12C2E35EC53EE6F8DF34",
+      "size": 1418394
+    },
+    "pan": {
+      "culture": "pa",
+      "sha256": "1EC0907FC3534065EA9AE190C6BB7EC9E5C74FD9D2FA996AAEC7407F11AD8131",
+      "size": 497721
+    },
+    "tam": {
+      "culture": "ta",
+      "sha256": "D02FBEC24BE4B07E32E80D0CCFC3B6B67A3C5D61C9D0A7C8532677990912C6EC",
+      "size": 3237963
+    },
+    "tel": {
+      "culture": "te",
+      "sha256": "D10691FDDD5B67802E1C12800EBB321D3B8BCD8D24A2AC3FF206F93188C04AB5",
+      "size": 2769654
+    },
+    "kan": {
+      "culture": "kn",
+      "sha256": "BD31E6B6AE93271E3BCF5383D306D8EEFBB91542937CD6D735A5930C970E61D8",
+      "size": 3608331
+    },
+    "mal": {
+      "culture": "ml",
+      "sha256": "BD05CBF1B197E7810D2903419AEDB06F9EF77BFEDF50B358673C1D18D707CDB4",
+      "size": 5275996
+    },
+    "sin": {
+      "culture": "si",
+      "sha256": "BC75C6DF2375A30C9F7E759FA7D4B58AE3ECF9CE72668A702D01ACB13E551422",
+      "size": 1727413
+    },
+    "nep": {
+      "culture": "ne",
+      "sha256": "280BA9450B4F21AFBF5985E0DE87857B75A972577C50EF0603C141DDDE4F1CB8",
+      "size": 1002911
+    },
+    "tha": {
+      "culture": "th",
+      "sha256": "294227CC2D1292B0ACB28D61D4115C88252B96D466CA90B417CF4CF0C67BF07C",
+      "size": 1072600
+    },
+    "vie": {
+      "culture": "vi",
+      "sha256": "79DF64CAF7BCFB2A27DF5042ECB6121E196EADA34DA774956995747636D5BFA1",
+      "size": 531275
+    },
+    "ind": {
+      "culture": "id",
+      "sha256": "69786901DA87AB8766C1EA7FBB10B28F2110C14DA3F6C8F2735DF131FBA95D88",
+      "size": 1122661
+    },
+    "msa": {
+      "culture": "ms",
+      "sha256": "E41A3E5FEBFEC50C90371EB1CBB17A48B10CAD387900E3420B1F134C1B766CBA",
+      "size": 1747801
+    },
+    "fil": {
+      "culture": "fil",
+      "sha256": "2B17F68014AB44B88B5E2334EBCD0CE0090D9AF7C6FBEF6FAB22E0BBD9A934DD",
+      "size": 1841715
+    },
+    "khm": {
+      "culture": "km",
+      "sha256": "47F110575341B322052F3BECBEFEE61A3ECF1EF549352B5D4D33D28AFE30D099",
+      "size": 1446926
+    },
+    "lao": {
+      "culture": "lo",
+      "sha256": "20124962E93E68121E02C49A949D1F9DF5DB87DD62E5E4AA578362CA532444F8",
+      "size": 6386744
+    },
+    "mya": {
+      "culture": "my",
+      "sha256": "02AA6C25CFE9E583FA7B5D4131EAC948F962308983F0F397DF077DEA58212B03",
+      "size": 4640561
+    },
+    "kor": {
+      "culture": "ko",
+      "sha256": "6B85E11D9BBF07863B97B3523B1B112844C43E713DF8B66418A081FD1060B3B2",
+      "size": 1677415
+    },
+    "jpn": {
+      "culture": "ja",
+      "sha256": "1F5DE9236D2E85F5FDF4B3C500F2D4926F8D9449F28F5394472D9E8D83B91B4D",
+      "size": 2471260
+    },
+    "chi_sim": {
+      "culture": "zh-Hans",
+      "sha256": "A5FCB6F0DB1E1D6D8522F39DB4E848F05984669172E584E8D76B6B3141E1F730",
+      "size": 2469156
+    },
+    "chi_tra": {
+      "culture": "zh-Hant",
+      "sha256": "529C5B5797D64B126065CD55F2BB4C7FD7B15790798091B1FF259941A829330B",
+      "size": 2366642
+    },
+    "kat": {
+      "culture": "ka",
+      "sha256": "557ABB6F1C68BC1B286F1BDD00BB6B82F85A427A91899807DAB6C2F6C7986731",
+      "size": 2524769
+    },
+    "hye": {
+      "culture": "hy",
+      "sha256": "B701D0D95799A716143DEDB0197504E56F27A1BB133D6607FF5778C6988CB67C",
+      "size": 3463717
+    },
+    "aze": {
+      "culture": "az",
+      "sha256": "A365310848AECB739F19369CB3831D4660FCD9345D798E91A3042455F9CCC9F0",
+      "size": 3524799
+    },
+    "kaz": {
+      "culture": "kk",
+      "sha256": "FCC01EED3815A42B9C6321C4C9D3606F39B166CBF95ADE98B7D8D12063EAE53D",
+      "size": 4734644
+    },
+    "uzb": {
+      "culture": "uz",
+      "sha256": "0E39021EEFE692906B50D9BD22E580FA57FE43FA35DB6846AD8B6369DDC21EA8",
+      "size": 6470703
+    },
+    "mon": {
+      "culture": "mn",
+      "sha256": "A151A3806D61AC43619CD383896D551BA5C3B07388FFEC6FC83C8C604D677570",
+      "size": 2137042
+    },
+    "amh": {
+      "culture": "am",
+      "sha256": "3EC3311833A108E07D58A1152B00C0CF1848752E4F85769D46E8CA2B718A2CCC",
+      "size": 5470094
+    },
+    "swa": {
+      "culture": "sw",
+      "sha256": "395439D1EC308535066CBAEA9B15E0E4CC81F8609170AF76AB7E7E8D3EC42F3E",
+      "size": 2167651
+    },
+    "afr": {
+      "culture": "af",
+      "sha256": "126D480BFAE95BE2A911ED4916465E27BDE75FEA2DA631E21B96762E5F239646",
+      "size": 2652786
+    }
+  }
+}

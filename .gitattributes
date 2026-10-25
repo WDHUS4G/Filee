@@ -20,3 +20,9 @@
 *.docx    binary
 *.hwpx    binary
 *.hwp     binary
+*.shp     binary
+*.shx     binary
+*.dbf     binary
+*.kmz     binary
+*.webp    binary
+*.gif     binary

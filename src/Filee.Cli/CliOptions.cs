@@ -19,6 +19,8 @@ internal sealed record CliOptions
     public bool Quiet { get; set; }
     public bool MoveOriginals { get; set; }
     public bool KeepDates { get; set; }
+
+    public bool Zip { get; set; }
     public double? SettleSeconds { get; set; }
     public string? Error { get; set; }
 
@@ -94,6 +96,9 @@ internal sealed record CliOptions
                     break;
                 case "--keep-dates":
                     options.KeepDates = true;
+                    break;
+                case "--zip":
+                    options.Zip = true;
                     break;
                 case "--settle":
                     var settle = Value();

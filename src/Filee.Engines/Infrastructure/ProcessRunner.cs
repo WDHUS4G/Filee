@@ -15,6 +15,9 @@ public static class ProcessRunner
     /// Starts <paramref name="executable"/> with the given arguments (no shell, arguments are escaped),
     /// waits for it to exit and kills the whole process tree on timeout or cancellation.
     /// </summary>
+    /// <exception cref="Filee.Core.Conversion.ConversionRefusedException">
+    /// Windows could not start the program because a DLL is missing (see <see cref="AppLocalRuntime"/>).
+    /// </exception>
     /// <param name="onOutput">Called with every line of standard output and error as it arrives (e.g. to parse progress).</param>
     public static async Task<ProcessResult> RunAsync(
         string executable,
@@ -67,6 +70,7 @@ public static class ProcessRunner
 
         // Make sure the async output readers have drained.
         process.WaitForExit();
+        AppLocalRuntime.ThrowIfMissing(executable, process.ExitCode);
         return new ProcessResult(process.ExitCode, stdout.ToString(), stderr.ToString());
     }
 

@@ -134,6 +134,36 @@ public class HwpxWriterTests(EngineFixture fx) : IClassFixture<EngineFixture>
         Assert.Equal(Text, HwpxConverter.DecodeText(Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes(Text)).ToArray()));
     }
 
+    [Theory]
+    [InlineData(936, "我是一个学生，这是我的文件。")] // #491: GBK, "ANSI" on Chinese Windows
+    [InlineData(950, "這是繁體中文的檔案。")]
+    [InlineData(932, "これは日本語のファイルです。")]
+    [InlineData(1252, "Café, déjà vu à l'été")]
+    public void Text_files_are_read_in_the_pcs_own_code_page(int codePage, string text)
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        Assert.Equal(text, DocumentReaders.DecodeText(Encoding.GetEncoding(codePage).GetBytes(text), codePage));
+    }
+
+    [Theory]
+    [InlineData("■ Item one\n※ Note\n● Point ①")]
+    [InlineData("大韓民國 憲法 第一條")]
+    [InlineData("한글 메모 <meta charset=\"iso-8859-1\"> encoding=\"cp1252\"")]
+    public void Korean_windows_reads_any_valid_cp949_text_as_cp949(string text)
+    {
+        // Symbols and Hanja aren't "mostly Hangul", and a charset= in the text is content, not the file's encoding.
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        Assert.Equal(text, DocumentReaders.DecodeText(Encoding.GetEncoding(949).GetBytes(text), 949));
+    }
+
+    [Fact]
+    public void Korean_windows_still_reads_a_western_file_as_windows_1252()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        const string Text = "Café, déjà vu à l'été. Señor Müller";
+        Assert.Equal(Text, DocumentReaders.DecodeText(Encoding.GetEncoding(1252).GetBytes(Text), 949));
+    }
+
     [Fact]
     public void Docx_is_written_by_the_built_in_writer_in_one_step()
     {

@@ -22,6 +22,7 @@ public enum FormatCategory
     Subtitle,
     Data,
     Model3D,
+    Geo,
 }
 
 /// <summary>

@@ -94,6 +94,17 @@ public class BuiltInDataTests
     }
 
     [Fact]
+    public void Only_compress_into_one_archive_presets_take_folders()
+    {
+        var presets = BuiltInData.CreatePresets().ToDictionary(p => p.Id);
+        Assert.True(presets["zip-all"].PacksIntoOneArchive);
+        Assert.False(presets["to-zip"].PacksIntoOneArchive); // one archive for each file
+        Assert.False(presets["extract"].PacksIntoOneArchive); // a folder is no archive to pack into
+        Assert.False(presets["to-pdf"].PacksIntoOneArchive);
+        Assert.False(new Preset { TargetFormat = "pdf", Archive = { CombineIntoOne = true } }.PacksIntoOneArchive);
+    }
+
+    [Fact]
     public void Preset_ids_are_unique()
     {
         var presets = BuiltInData.CreatePresets();
@@ -113,6 +124,45 @@ public class BuiltInDataTests
                 Assert.Equal(Preset.GroupTarget, preset.TargetFormat); // none an older Filee could run it with
             else
                 Assert.True(preset.TargetFormat == BuiltInData.SameAsSource || FormatRegistry.FindById(preset.TargetFormat) is not null, preset.Id);
+        }
+    }
+
+    [Theory]
+    [InlineData("mp4", "png", true)]
+    [InlineData("mkv", "jpg", true)]
+    [InlineData("mov", "webp", false)] // frames are PNG or JPG only
+    [InlineData("mp4", "jpeg", false)] // a format id, not an extension
+    [InlineData("gif", "png", false)] // a picture, not a video
+    [InlineData("mp3", "png", false)]
+    public void Every_frame_is_saved_for_videos_to_png_or_jpg(string source, string target, bool expected)
+    {
+        Assert.Equal(expected, new Preset { TargetFormat = target, Media = { SaveEveryFrame = true } }.SavesFramesOf(source));
+        Assert.False(new Preset { TargetFormat = target }.SavesFramesOf(source));
+    }
+
+    [Fact]
+    public void Extract_frames_preset_is_properly_configured()
+    {
+        var presets = BuiltInData.CreatePresets();
+        var pngPreset = Assert.Single(presets, p => p.Id == "extract-frames-png" || p.NameKey == "preset.extract_frames_png");
+
+        Assert.Equal("png", pngPreset.TargetFormat);
+        Assert.True(pngPreset.Media.SaveEveryFrame);
+        Assert.Equal(1, pngPreset.Media.FrameInterval);
+
+        var jpgPreset = Assert.Single(presets, p => p.Id == "extract-frames-jpg" || p.NameKey == "preset.extract_frames_jpg");
+
+        Assert.Equal("jpg", jpgPreset.TargetFormat);
+        Assert.True(jpgPreset.Media.SaveEveryFrame);
+        Assert.Equal(1, jpgPreset.Media.FrameInterval);
+        Assert.Equal(90, jpgPreset.Image.Quality);
+
+        // Ensure they are NOT added to any default donut profile to prevent accidental frame splitting
+        var profiles = BuiltInData.CreateProfiles();
+        foreach (var profile in profiles)
+        {
+            Assert.DoesNotContain(pngPreset.Id, profile.PresetIds);
+            Assert.DoesNotContain(jpgPreset.Id, profile.PresetIds);
         }
     }
 }

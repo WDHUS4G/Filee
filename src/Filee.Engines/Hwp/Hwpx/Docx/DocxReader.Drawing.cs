@@ -373,7 +373,8 @@ internal sealed partial class DocxReader
 
     // ───────────────────────── VML (legacy) ─────────────────────────
 
-    private IEnumerable<HInline> Vml(XElement container)
+    /// <param name="format">Formatting of the run holding the objects (WordArt text starts from it).</param>
+    private IEnumerable<HInline> Vml(XElement container, HCharFormat format)
     {
         foreach (var shape in container.Elements())
         {
@@ -381,7 +382,7 @@ internal sealed partial class DocxReader
                 continue;
             if (shape.Name.LocalName == "group")
             {
-                foreach (var inline in Vml(shape))
+                foreach (var inline in Vml(shape, format))
                     yield return inline;
                 continue;
             }
@@ -406,6 +407,21 @@ internal sealed partial class DocxReader
                 }.Build();
                 ReadTextBoxContent(content, box.Blocks);
                 yield return box;
+            }
+            else if (WordArt(shape, width, height, format) is { } text)
+            {
+                if (anchor is null)
+                {
+                    yield return text;
+                }
+                else
+                {
+                    var box = new TextBoxBuilder(width, height, anchor) { Line = HBorder.None, Padding = new HInsets(0, 0, 0, 0), VerticalAlign = HVerticalAlign.Center }.Build();
+                    var paragraph = new HParagraph { Format = new HParaFormat(Align: HAlign.Center) };
+                    paragraph.Inlines.Add(text);
+                    box.Blocks.Add(paragraph);
+                    yield return box;
+                }
             }
             else if (shape.Name.LocalName is "rect" or "roundrect" or "oval" or "line")
             {
@@ -440,6 +456,45 @@ internal sealed partial class DocxReader
                 };
             }
         }
+    }
+
+    /// <summary>
+    /// Legacy WordArt (a VML shape with v:textpath, as WPS and older Word write it) as plain text in its font and
+    /// fill colour. 한글 has no text effects, so the text keeps the run's other formatting; when the text is stretched
+    /// to the shape (fitpath / fitshape), the font size is chosen so it fills about the same box.
+    /// </summary>
+    private static HText? WordArt(XElement shape, int width, int height, HCharFormat format)
+    {
+        var path = shape.Element(V + "textpath");
+        var text = (string?)path?.Attribute("string");
+        if (path is null || (string?)path.Attribute("on") is "f" or "false" || string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var font = VmlStyle((string?)path.Attribute("style"));
+        var family = font.GetValueOrDefault("font-family")?.Trim('"', '\'', ' ');
+        var size = HwpxUnits.ParseLength(font.GetValueOrDefault("font-size")) is { } points and > 0 ? points : format.Size ?? 1000;
+        var stretched = (string?)path.Attribute("fitpath") is "t" or "true" || (string?)path.Attribute("fitshape") is "t" or "true";
+        if (stretched && width > 0 && height > 0)
+        {
+            // The glyphs fill the shape: capitals and digits are about 0.72 em tall, Han characters about 0.9 em;
+            // East Asian characters are 1 em wide, others about half.
+            var wide = text.Count(c => c is >= '⺀' and <= '鿿' or >= '가' and <= '힣' or >= '＀' and <= '｠');
+            var ems = wide + (text.Length - wide) * 0.5;
+            var byHeight = height / (wide > 0 ? 0.9 : 0.72);
+            size = (int)Math.Min(byHeight, width / Math.Max(ems, 1));
+        }
+        var color = (string?)shape.Attribute("filled") is "f" or "false"
+            ? VmlColor((string?)shape.Attribute("strokecolor"))
+            : VmlColor((string?)shape.Attribute("fillcolor"));
+        return new HText(text.Replace('\n', ' ').Replace('\r', ' '), format with
+        {
+            Size = Math.Max(size, 100),
+            Font = family ?? format.Font,
+            EastAsianFont = family ?? format.EastAsianFont,
+            Bold = font.GetValueOrDefault("font-weight") is { } weight ? weight == "bold" || int.TryParse(weight, out var w) && w >= 600 : format.Bold,
+            Italic = font.GetValueOrDefault("font-style") is { } italic ? italic == "italic" : format.Italic,
+            Color = color ?? format.Color,
+        });
     }
 
     private static string? VmlFill(XElement shape) =>

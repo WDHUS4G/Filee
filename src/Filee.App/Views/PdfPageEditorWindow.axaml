@@ -1,0 +1,124 @@
+<!-- Lossless PDF page organiser opened by Edit → Pages / Add pages on the donut. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Filee.App.ViewModels"
+        x:Class="Filee.App.Views.PdfPageEditorWindow"
+        x:DataType="vm:PdfPageEditorViewModel"
+        Title="{DynamicResource pdf_editor.title}"
+        Icon="avares://Filee/Assets/Icons/filee.ico"
+        Width="940" Height="660" MinWidth="720" MinHeight="500"
+        Opened="OnOpened"
+        WindowStartupLocation="CenterScreen">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Alt+Up" Command="{Binding MoveUpCommand}" />
+    <KeyBinding Gesture="Alt+Down" Command="{Binding MoveDownCommand}" />
+    <KeyBinding Gesture="Delete" Command="{Binding DeleteCommand}" />
+  </Window.KeyBindings>
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="20,12" BorderThickness="0,1,0,0"
+            BorderBrush="{DynamicResource SubtleBorderBrush}" Background="{DynamicResource SurfaceBrush}">
+      <DockPanel>
+        <TextBlock Text="{Binding Status}" Classes="caption" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" IsVisible="{Binding HasStatus}" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+          <Button Content="{DynamicResource common.cancel}" Click="OnCancel" IsCancel="True" />
+          <Button Classes="accent" Content="{DynamicResource common.save}" Click="OnSave" IsDefault="True"
+                  IsEnabled="{Binding CanSave}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <StackPanel DockPanel.Dock="Top" Margin="20,18,20,10" Spacing="10">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="h2" Text="{DynamicResource pdf_editor.title}" />
+        <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource pdf_editor.hint}" />
+      </StackPanel>
+      <WrapPanel Orientation="Horizontal">
+        <Button Margin="0,0,6,6" Click="OnAdd">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Plus}" />
+            <TextBlock Text="{DynamicResource pdf_editor.add}" />
+          </StackPanel>
+        </Button>
+        <Button Margin="0,0,6,6" Command="{Binding MoveUpCommand}" ToolTip.Tip="{DynamicResource group.move_up}" AutomationProperties.Name="{DynamicResource group.move_up}">
+          <PathIcon Width="14" Height="14" Data="{StaticResource Icon.ArrowUp}" />
+        </Button>
+        <Button Margin="0,0,6,6" Command="{Binding MoveDownCommand}" ToolTip.Tip="{DynamicResource group.move_down}" AutomationProperties.Name="{DynamicResource group.move_down}">
+          <PathIcon Width="14" Height="14" Data="{StaticResource Icon.ArrowDown}" />
+        </Button>
+        <Button Margin="0,0,6,6" Command="{Binding RotateLeftCommand}" Content="{DynamicResource preset.rotate_left.short}" />
+        <Button Margin="0,0,6,6" Command="{Binding RotateRightCommand}" Content="{DynamicResource preset.rotate_right.short}" />
+        <Button Margin="0,0,6,6" Command="{Binding DeleteCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <PathIcon Width="13" Height="13" Data="{StaticResource Icon.Delete}" />
+            <TextBlock Text="{DynamicResource pdf_editor.delete}" />
+          </StackPanel>
+        </Button>
+        <Button Margin="0,0,6,6" Click="OnExtract" Content="{DynamicResource preset.pdf_extract.short}" />
+      </WrapPanel>
+    </StackPanel>
+
+    <Grid ColumnDefinitions="280,10,*" Margin="20,0,20,14">
+      <ListBox x:Name="PageOrder" Grid.Column="0" ItemsSource="{Binding Pages}" SelectedItem="{Binding SelectedPage}"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled" Background="{DynamicResource SurfaceAltBrush}">
+        <ListBox.Styles>
+          <Style Selector="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+          </Style>
+        </ListBox.Styles>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:PdfPageItem">
+            <Grid ColumnDefinitions="92,*" MinHeight="108" Margin="4,5">
+              <Border Width="82" Height="98" CornerRadius="6" Background="White"
+                      BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1" ClipToBounds="True">
+                <Grid>
+                  <Image Source="{Binding Thumbnail}" Stretch="Uniform" Margin="4"
+                         RenderTransformOrigin="50%,50%" IsVisible="{Binding HasThumbnail}">
+                    <Image.RenderTransform>
+                      <RotateTransform Angle="{Binding PreviewRotation}" />
+                    </Image.RenderTransform>
+                  </Image>
+                  <TextBlock Text="{Binding PageNumber}" Foreground="#666666" FontSize="20"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             IsVisible="{Binding !HasThumbnail}" />
+                </Grid>
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="{Binding PageText}" FontWeight="SemiBold" />
+                <TextBlock Classes="caption" Text="{Binding SourceName}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="caption" Text="{Binding RotationText}" />
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Center" Background="Transparent" />
+
+      <Border Grid.Column="2" Background="{DynamicResource SurfaceAltBrush}" CornerRadius="8"
+              BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1" Padding="16">
+        <Grid RowDefinitions="Auto,*">
+          <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,10">
+            <StackPanel Spacing="2">
+              <TextBlock Text="{Binding SelectedPage.PageText}" FontWeight="SemiBold" />
+              <TextBlock Classes="caption" Text="{Binding SelectedPage.SourceName}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Classes="caption" Text="{Binding SelectedPage.RotationText}"
+                       VerticalAlignment="Center" />
+          </Grid>
+          <Grid Grid.Row="1" ClipToBounds="True">
+            <TextBlock Text="{DynamicResource pdf_editor.loading}" Classes="caption"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="{Binding IsPreviewLoading}" />
+            <Image Source="{Binding SelectedPreview}" Stretch="Uniform" Margin="20"
+                   RenderTransformOrigin="50%,50%" IsVisible="{Binding HasSelectedPreview}">
+              <Image.RenderTransform>
+                <RotateTransform Angle="{Binding SelectedPreviewRotation}" />
+              </Image.RenderTransform>
+            </Image>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>

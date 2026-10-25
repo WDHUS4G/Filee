@@ -160,7 +160,7 @@ public class DocxToHwpxTests(EngineFixture fx) : IClassFixture<EngineFixture>
         var levels = numbering.Elements(Hh + "paraHead").Take(2).Select(h => ((string?)h.Attribute("numFormat"), h.Value)).ToList();
         Assert.Equal([("DIGIT", "^1."), ("HANGUL_SYLLABLE", "^2)")], levels);
         var bullet = ParaPr(ParagraphWith(section, "글머리 항목")).Element(Hh + "heading")!;
-        Assert.Equal("●", head.Descendants(Hh + "numbering").Single(n => (string?)n.Attribute("id") == (string?)bullet.Attribute("idRef")).Elements(Hh + "paraHead").First().Value);
+        Assert.Equal("•", head.Descendants(Hh + "numbering").Single(n => (string?)n.Attribute("id") == (string?)bullet.Attribute("idRef")).Elements(Hh + "paraHead").First().Value);
 
         // Runs split by Word but formatted alike become one text run.
         Assert.Contains(section.Descendants(Hp + "t"), t => t.Value == "2016-06-15");

@@ -45,10 +45,11 @@
               <DockPanel>
                 <Button DockPanel.Dock="Right" Classes="icon"
                         Command="{Binding $parent[ItemsControl].((vm:TriggersPageViewModel)DataContext).RemoveCommand}"
-                        CommandParameter="{Binding}" ToolTip.Tip="{DynamicResource triggers.remove}">
+                        CommandParameter="{Binding}" ToolTip.Tip="{DynamicResource triggers.remove}" AutomationProperties.Name="{DynamicResource triggers.remove}">
                   <PathIcon Width="15" Height="15" Data="{StaticResource Icon.Delete}" />
                 </Button>
-                <ToggleSwitch DockPanel.Dock="Left" IsChecked="{Binding Enabled}" OnContent="" OffContent="" Margin="0,0,8,0" />
+                <ToggleSwitch DockPanel.Dock="Left" IsChecked="{Binding Enabled}" OnContent="" OffContent="" Margin="0,0,8,0"
+                              AutomationProperties.Name="{Binding Summary}" />
                 <Border Classes="badge ok" VerticalAlignment="Center" HorizontalAlignment="Left">
                   <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Foreground="{DynamicResource AccentStrongBrush}" />
                 </Border>
@@ -57,11 +58,11 @@
               <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,14,Auto">
                 <StackPanel>
                   <TextBlock Classes="label" Text="{DynamicResource triggers.kind}" />
-                  <ComboBox ItemsSource="{Binding Kinds}" SelectedItem="{Binding Kind}" HorizontalAlignment="Stretch" />
+                  <ComboBox ItemsSource="{Binding Kinds}" SelectedItem="{Binding Kind}" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource triggers.kind}" />
                 </StackPanel>
                 <StackPanel Grid.Column="2">
                   <TextBlock Classes="label" Text="{DynamicResource triggers.scope}" />
-                  <ComboBox ItemsSource="{Binding Scopes}" SelectedItem="{Binding Scope}" HorizontalAlignment="Stretch" />
+                  <ComboBox ItemsSource="{Binding Scopes}" SelectedItem="{Binding Scope}" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource triggers.scope}" />
                 </StackPanel>
 
                 <StackPanel Grid.Row="2">
@@ -77,7 +78,7 @@
                 <StackPanel Grid.Row="2" Grid.Column="2" Spacing="10">
                   <StackPanel IsVisible="{Binding UsesMouse}">
                     <TextBlock Classes="label" Text="{DynamicResource triggers.button}" />
-                    <ComboBox ItemsSource="{Binding Buttons}" SelectedItem="{Binding Button}" HorizontalAlignment="Stretch" />
+                    <ComboBox ItemsSource="{Binding Buttons}" SelectedItem="{Binding Button}" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource triggers.button}" />
                   </StackPanel>
                   <StackPanel IsVisible="{Binding UsesKey}">
                     <TextBlock Classes="label" Text="{DynamicResource triggers.key}" />
@@ -85,7 +86,7 @@
                       <Border Classes="badge" MinWidth="120" Padding="12,6">
                         <TextBlock Text="{Binding KeyText}" FontWeight="SemiBold" />
                       </Border>
-                      <ToggleButton IsChecked="{Binding IsRecording}" KeyDown="OnRecorderKeyDown">
+                      <ToggleButton Classes="recorder" IsChecked="{Binding IsRecording}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Record}" Foreground="{DynamicResource DangerBrush}" />
                           <TextBlock Text="{Binding RecordLabel}" />
@@ -102,7 +103,7 @@
                   <TextBlock DockPanel.Dock="Right" Text="{Binding ThresholdText}" FontWeight="SemiBold" />
                   <TextBlock Classes="label" Text="{DynamicResource triggers.threshold}" />
                 </DockPanel>
-                <Slider Minimum="0" Maximum="80" Value="{Binding DragThreshold}" TickFrequency="1" IsSnapToTickEnabled="True" />
+                <Slider Minimum="0" Maximum="80" Value="{Binding DragThreshold}" TickFrequency="1" IsSnapToTickEnabled="True" AutomationProperties.Name="{DynamicResource triggers.threshold}" />
               </StackPanel>
               <StackPanel IsVisible="{Binding UsesHold}">
                 <DockPanel>
@@ -111,13 +112,43 @@
                   </TextBlock>
                   <TextBlock Classes="label" Text="{DynamicResource triggers.hold_ms}" />
                 </DockPanel>
-                <Slider Minimum="150" Maximum="2000" Value="{Binding HoldMilliseconds}" TickFrequency="50" IsSnapToTickEnabled="True" />
+                <Slider Minimum="150" Maximum="2000" Value="{Binding HoldMilliseconds}" TickFrequency="50" IsSnapToTickEnabled="True" AutomationProperties.Name="{DynamicResource triggers.hold_ms}" />
               </StackPanel>
             </StackPanel>
           </Border>
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+
+    <!-- Flipping the open donut to its other face: a key (recorded) and the mouse wheel -->
+    <Border x:Name="FlipCard" Classes="card">
+      <StackPanel Spacing="10" DataContext="{Binding Flip}" x:DataType="vm:FlipOptionsViewModel">
+        <TextBlock Classes="label" Text="{DynamicResource triggers.flip_title}" />
+        <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource triggers.flip_description}" />
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="{DynamicResource triggers.key}" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <Border Classes="badge" MinWidth="120" Padding="12,6">
+            <TextBlock Text="{Binding KeyText}" FontWeight="SemiBold" />
+          </Border>
+          <ToggleButton x:Name="FlipRecorder" IsChecked="{Binding IsRecording}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Record}" Foreground="{DynamicResource DangerBrush}" />
+              <TextBlock Text="{DynamicResource triggers.record}" />
+            </StackPanel>
+          </ToggleButton>
+          <Button Classes="ghost" Content="{DynamicResource triggers.flip_reset}" Command="{Binding ResetKeyCommand}" />
+          <Button Classes="ghost" Content="{DynamicResource triggers.clear}" Command="{Binding ClearKeyCommand}" />
+        </StackPanel>
+        <TextBlock Classes="caption danger" TextWrapping="Wrap" Text="{Binding Error}"
+                   IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <DockPanel>
+          <ToggleSwitch x:Name="FlipWheel" DockPanel.Dock="Right" OnContent="{x:Null}" OffContent="{x:Null}" MinWidth="0"
+                        Margin="12,0,0,0" VerticalAlignment="Center" IsChecked="{Binding FlipWithWheel}"
+                        AutomationProperties.Name="{DynamicResource triggers.flip_wheel}" />
+          <TextBlock Text="{DynamicResource triggers.flip_wheel}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+      </StackPanel>
+    </Border>
 
     <Border Classes="card">
       <StackPanel Spacing="8" DataContext="{Binding ExcludedApps}" x:DataType="vm:ExcludedAppsViewModel">

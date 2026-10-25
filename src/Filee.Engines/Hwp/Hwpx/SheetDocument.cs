@@ -3,7 +3,7 @@
 //
 // Layout choices, since a sheet has no page of its own: A4 with narrow margins, landscape when the columns are much
 // wider than a portrait page, columns (and text) scaled down to fit the width like "Fit all columns on one page",
-// light grey grid lines where cells have no border, frozen top rows repeated on every page.
+// light grey grid lines where cells have no border, the rows to repeat at the top (or frozen top rows) on every page.
 
 using Filee.Engines.Office.Sheets;
 
@@ -11,6 +11,10 @@ namespace Filee.Engines.Hwp.Hwpx;
 
 internal static class SheetDocument
 {
+    /// <summary>The formats DocumentReaders reads into a document through <see cref="Build"/>.</summary>
+    public static readonly IReadOnlySet<string> SourceFormats =
+        new HashSet<string>(["xlsx", "xlsm", "xltx", "csv", "tsv", "xls", "xlt", "ods"], StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Largest table written; bigger sheets are cut with a note (a PDF of 100 000 rows helps nobody).</summary>
     private const int MaxRows = 5000;
     private const int MaxColumns = 60;
@@ -66,10 +70,15 @@ internal static class SheetDocument
             section.Blocks.Add(title);
         }
 
-        // Page breaks set in Excel start a new table on a new page; frozen header rows repeat at its top.
-        var headerRows = sheet.FrozenRows is > 0 and <= 5 ? sheet.FrozenRows : 0;
-        var header = rows.Where(r => r < headerRows).ToList();
-        var body = rows.Where(r => r >= headerRows).ToList();
+        // Page breaks set in Excel start a new table on a new page; the rows to repeat at the top (Print Titles, else
+        // frozen header rows) repeat at its top. Rows above print titles (a document title) come once, before them.
+        var titles = sheet.TitleRows ?? (sheet.FrozenRows is > 0 and <= 5 ? (0, sheet.FrozenRows - 1) : null);
+        var headerRows = titles is { } t ? rows.Where(r => r >= t.First && r <= t.Last).ToHashSet() : [];
+        var lead = titles is { } above ? rows.Where(r => r < above.First).ToList() : [];
+        var header = rows.Where(headerRows.Contains).ToList();
+        var body = rows.Where(r => !headerRows.Contains(r) && (titles is not { } u || r > u.Last)).ToList();
+        if (lead.Count > 0)
+            section.Blocks.Add(Table(sheet, lead, columns, [], fontScale, widths.Select(w => Math.Max(300, (int)(w * scale))).ToArray()));
         var pages = new List<List<int>> { new(header) };
         var previous = -1;
         foreach (var r in body)
@@ -99,7 +108,7 @@ internal static class SheetDocument
     }
 
     /// <summary>One table of the given rows (one printed page or more), merged areas cut at its first and last row.</summary>
-    private static HTable Table(Worksheet sheet, List<int> rows, List<int> columns, int headerRows, double fontScale, int[] widths)
+    private static HTable Table(Worksheet sheet, List<int> rows, List<int> columns, HashSet<int> headerRows, double fontScale, int[] widths)
     {
         var table = new HTable
         {
@@ -130,7 +139,7 @@ internal static class SheetDocument
         {
             var row = new HRow
             {
-                Header = r < headerRows,
+                Header = headerRows.Contains(r),
                 Height = sheet.RowHeights.TryGetValue(r, out var points) ? (int)(points * 100 * fontScale) : null,
             };
             foreach (var c in columns)

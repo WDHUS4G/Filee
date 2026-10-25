@@ -17,7 +17,8 @@ namespace Filee.Engines.Cad;
 /// <remarks>
 /// Rendering draws model space as seen from the top (the active layout when model space is empty), fitted to the
 /// page: PDF on an A3 sheet (A4 / Letter when the preset says so), SVG and images with the drawing's aspect ratio
-/// on a white background. See docs/ENGINES.md for what is and is not drawn.
+/// on a white background. A PDF of a drawing with paper-space layouts has one page per layout instead, with model
+/// space shown through each layout's viewports. See docs/ENGINES.md for what is and is not drawn.
 /// </remarks>
 public sealed class CadConverter(ILogger? logger = null) : IConverter, IImageTransformer
 {
@@ -40,6 +41,9 @@ public sealed class CadConverter(ILogger? logger = null) : IConverter, IImageTra
     [
         new("dwg", "dxf"),
         new("dxf", "dwg"),
+        // Into another version of the same format (#489).
+        new("dwg", "dwg"),
+        new("dxf", "dxf"),
         .. from source in Sources
            from target in (string[])["pdf", "svg", .. ImageEncoder.Writable]
            select ImageEncoder.Edge(source, target),
@@ -59,14 +63,19 @@ public sealed class CadConverter(ILogger? logger = null) : IConverter, IImageTra
             {
                 if (step.Output.Allocate(step.To) is not { } path)
                     return [];
-                CadFile.Write(document, path, step.To, message => _logger.LogDebug("{File}: {Message}", path, message));
+                if (CadFile.Write(document, path, step.To, step.Preset.Cad.Version, message => _logger.LogDebug("{File}: {Message}", path, message)) > 0)
+                    step.Notice?.Invoke("notice.cad_newer_left_out");
                 progress?.Report(1);
                 return [path];
             }
 
             var scene = CadSceneBuilder.Build(document, cancellationToken);
             Report(step.InputPath, scene);
-            if (scene.Items.Count == 0)
+            // A PDF follows the layouts like a plot of every sheet; images and SVG stay one picture of model space.
+            var sheets = step.To == "pdf" ? CadSceneBuilder.BuildLayouts(document, cancellationToken) : [];
+            if (sheets.Count > 0)
+                _logger.LogInformation("{File}: {Count} layout(s), one PDF page each", step.InputPath, sheets.Count);
+            if (scene.Items.Count == 0 && sheets.Count == 0)
                 throw new InvalidDataException(scene.Skipped.Count > 0
                     ? $"The drawing only contains objects Filee cannot draw ({string.Join(", ", scene.Skipped.Keys)})."
                     : "The drawing has nothing visible to draw: model space and the layout are empty, or every entity is on a layer that is off, frozen or not plotted.");
@@ -80,7 +89,15 @@ public sealed class CadConverter(ILogger? logger = null) : IConverter, IImageTra
             {
                 case "pdf":
                     using (var stream = File.Create(output))
-                        CadRenderer.WritePdf(scene, step.Preset.Pdf, Path.GetFileNameWithoutExtension(step.InputPath), stream);
+                    {
+                        // With empty model space the scene is the active layout's paper space, which must not show
+                        // through the viewports.
+                        if (sheets.Count > 0)
+                            CadRenderer.WritePdf(sheets, scene.Space == "model" ? scene : new CadScene(), step.Preset.Pdf,
+                                Path.GetFileNameWithoutExtension(step.InputPath), stream);
+                        else
+                            CadRenderer.WritePdf(scene, step.Preset.Pdf, Path.GetFileNameWithoutExtension(step.InputPath), stream);
+                    }
                     break;
                 case "svg":
                     using (var stream = File.Create(output))

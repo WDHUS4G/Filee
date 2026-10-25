@@ -38,6 +38,16 @@ public partial class GeneralPage : UserControl
             Vm.DefaultFolder = path;
     }
 
+    private async void OnBrowseBrowserFolder(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is null || TopLevel.GetTopLevel(this) is not { } top)
+            return;
+        var start = await top.StorageProvider.TryGetFolderFromPathAsync(Vm.BrowserFolderInUse);
+        var folders = await top.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { AllowMultiple = false, SuggestedStartLocation = start });
+        if (folders.FirstOrDefault()?.TryGetLocalPath() is { } path)
+            Vm.BrowserFolder = path;
+    }
+
     private async void OnImport(object? sender, RoutedEventArgs e)
     {
         if (Vm is null || TopLevel.GetTopLevel(this) is not { } top)

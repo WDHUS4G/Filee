@@ -233,23 +233,8 @@ public class ModelTests(EngineFixture fx) : IClassFixture<EngineFixture>
     public async Task Gltf_with_a_separate_buffer_and_texture_is_read()
     {
         var folder = fx.NewFolder();
-        var root = ModelRoot.CreateModel();
-        var material = root.CreateMaterial("Painted");
-        material.InitializePBRMetallicRoughness();
-        material.FindChannel("BaseColor")!.Value.SetTexture(0, root.UseImage(new SharpGLTF.Memory.MemoryImage(ModelBuilders.Checker())), null,
-            TextureWrapMode.REPEAT, TextureWrapMode.REPEAT, TextureMipMapFilter.DEFAULT, TextureInterpolationFilter.DEFAULT);
-        var mesh = root.CreateMesh("Quad");
-        var primitive = mesh.CreatePrimitive();
-        primitive.SetVertexAccessor("POSITION", Accessor(root, [new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 1, 0), new Vector3(0, 1, 0)]));
-        primitive.SetVertexAccessor("TEXCOORD_0", Accessor(root, [new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0), new Vector2(0, 0)]));
-        var indices = root.CreateAccessor();
-        indices.SetIndexData(root.UseBufferView(new byte[] { 0, 0, 1, 0, 2, 0, 0, 0, 2, 0, 3, 0 }, 0, null, 0, BufferMode.ELEMENT_ARRAY_BUFFER), 0, 6, IndexEncodingType.UNSIGNED_SHORT);
-        primitive.SetIndexAccessor(indices);
-        primitive.Material = material;
         // The node scales by 2 and moves up by 1 m: both end up in the vertices.
-        var node = root.UseScene("Scene").CreateNode("Quad");
-        node.Mesh = mesh;
-        node.LocalMatrix = Matrix4x4.CreateScale(2) * Matrix4x4.CreateTranslation(0, 1, 0);
+        var root = TexturedQuad(Matrix4x4.CreateScale(2) * Matrix4x4.CreateTranslation(0, 1, 0));
         var gltf = Path.Combine(folder, "quad.gltf");
         root.SaveGLTF(gltf, new WriteSettings { ImageWriting = ResourceWriteMode.SatelliteFile });
         Assert.NotEmpty(Directory.GetFiles(folder, "*.bin"));
@@ -264,6 +249,87 @@ public class ModelTests(EngineFixture fx) : IClassFixture<EngineFixture>
 
         var objJob = await RunAsync(gltf, "obj");
         Assert.Equal(3, objJob.Outputs.Count()); // .obj, .mtl and the texture
+    }
+
+    [Fact]
+    public void Gltf_buffers_and_pictures_stay_beside_the_model()
+    {
+        var folder = fx.NewFolder();
+        var source = Directory.CreateDirectory(Path.Combine(folder, "source")).FullName;
+        var outside = Directory.CreateDirectory(Path.Combine(folder, "outside")).FullName;
+        Directory.CreateDirectory(Path.Combine(source, "textures"));
+        var gltf = Path.Combine(source, "quad.gltf");
+        TexturedQuad(Matrix4x4.Identity).SaveGLTF(gltf, new WriteSettings { ImageWriting = ResourceWriteMode.SatelliteFile });
+        var picture = Path.GetFileName(Directory.GetFiles(source, "*.png").Single());
+        var buffer = Path.GetFileName(Directory.GetFiles(source, "*.bin").Single());
+        var json = File.ReadAllText(gltf);
+        Model3D Load(string from, string to)
+        {
+            File.WriteAllText(gltf, json.Replace($"\"{from}\"", $"\"{to}\"", StringComparison.Ordinal));
+            return ModelBuilders.Load(gltf, "gltf");
+        }
+
+        // A folder below the model's is fine.
+        File.Move(Path.Combine(source, picture), Path.Combine(source, "textures", picture));
+        var model = Load(picture, "textures/" + picture);
+        Assert.Equal(ModelBuilders.Checker(), model.MaterialOf(model.Parts.Single())!.BaseColorTexture!.Data);
+
+        // A picture up and out of it, or a buffer at an absolute path, is never opened.
+        File.Move(Path.Combine(source, "textures", picture), Path.Combine(outside, picture));
+        Assert.Contains(picture, Assert.Throws<InvalidDataException>(() => Load(picture, "../outside/" + picture)).Message);
+        File.Move(Path.Combine(outside, picture), Path.Combine(source, picture));
+        File.Move(Path.Combine(source, buffer), Path.Combine(outside, buffer));
+        Assert.Throws<InvalidDataException>(() => Load(buffer, new Uri(Path.Combine(outside, buffer)).AbsoluteUri));
+        Assert.Throws<InvalidDataException>(() => Load(buffer, Path.Combine(outside, buffer).Replace('\\', '/')));
+    }
+
+    [Fact]
+    public void Gltf_reads_percent_encoded_buffer_and_picture_names()
+    {
+        var folder = fx.NewFolder();
+        var source = Directory.CreateDirectory(Path.Combine(folder, "source")).FullName;
+        var gltf = Path.Combine(source, "quad.gltf");
+        TexturedQuad(Matrix4x4.Identity).SaveGLTF(gltf, new WriteSettings { ImageWriting = ResourceWriteMode.SatelliteFile });
+        var json = JsonNode.Parse(File.ReadAllText(gltf))!;
+        var picture = (string)json["images"]![0]!["uri"]!;
+        var buffer = (string)json["buffers"]![0]!["uri"]!;
+        File.Move(Path.Combine(source, picture), Path.Combine(source, "paint image.png"));
+        File.Move(Path.Combine(source, buffer), Path.Combine(source, "mesh data.bin"));
+        json["images"]![0]!["uri"] = "paint%20image.png";
+        json["buffers"]![0]!["uri"] = "mesh%20data.bin";
+        File.WriteAllText(gltf, json.ToJsonString());
+
+        var model = ModelBuilders.Load(gltf, "gltf");
+        Assert.Equal(2, model.TriangleCount);
+        Assert.Equal(ModelBuilders.Checker(), model.MaterialOf(model.Parts.Single())!.BaseColorTexture!.Data);
+
+        // Decoding must still leave the existing folder boundary in force.
+        var outside = Directory.CreateDirectory(Path.Combine(folder, "outside")).FullName;
+        File.Move(Path.Combine(source, "paint image.png"), Path.Combine(outside, "paint image.png"));
+        json["images"]![0]!["uri"] = "..%2Foutside%2Fpaint%20image.png";
+        File.WriteAllText(gltf, json.ToJsonString());
+        Assert.Throws<InvalidDataException>(() => ModelBuilders.Load(gltf, "gltf"));
+    }
+
+    private static ModelRoot TexturedQuad(Matrix4x4 transform)
+    {
+        var root = ModelRoot.CreateModel();
+        var material = root.CreateMaterial("Painted");
+        material.InitializePBRMetallicRoughness();
+        material.FindChannel("BaseColor")!.Value.SetTexture(0, root.UseImage(new SharpGLTF.Memory.MemoryImage(ModelBuilders.Checker())), null,
+            TextureWrapMode.REPEAT, TextureWrapMode.REPEAT, TextureMipMapFilter.DEFAULT, TextureInterpolationFilter.DEFAULT);
+        var mesh = root.CreateMesh("Quad");
+        var primitive = mesh.CreatePrimitive();
+        primitive.SetVertexAccessor("POSITION", Accessor(root, [new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 1, 0), new Vector3(0, 1, 0)]));
+        primitive.SetVertexAccessor("TEXCOORD_0", Accessor(root, [new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0), new Vector2(0, 0)]));
+        var indices = root.CreateAccessor();
+        indices.SetIndexData(root.UseBufferView(new byte[] { 0, 0, 1, 0, 2, 0, 0, 0, 2, 0, 3, 0 }, 0, null, 0, BufferMode.ELEMENT_ARRAY_BUFFER), 0, 6, IndexEncodingType.UNSIGNED_SHORT);
+        primitive.SetIndexAccessor(indices);
+        primitive.Material = material;
+        var node = root.UseScene("Scene").CreateNode("Quad");
+        node.Mesh = mesh;
+        node.LocalMatrix = transform;
+        return root;
     }
 
     private static Accessor Accessor<T>(ModelRoot root, T[] values) where T : unmanaged
@@ -370,6 +436,49 @@ public class ModelTests(EngineFixture fx) : IClassFixture<EngineFixture>
         var glb = ModelRoot.Load((await RunAsync(Path.Combine(folder, "parts.obj"), "glb")).Outputs.Single());
         Assert.Equal(8, glb.LogicalMeshes.Sum(m => m.Primitives.Sum(p => p.GetTriangleIndices().Count())));
         Assert.NotNull(glb.LogicalMaterials.Single(m => m.Name == "wood").FindChannel("BaseColor")!.Value.Texture);
+    }
+
+    [Fact]
+    public void Obj_textures_stay_beside_the_model()
+    {
+        var root = fx.NewFolder();
+        var source = Directory.CreateDirectory(Path.Combine(root, "source")).FullName;
+        var outside = Directory.CreateDirectory(Path.Combine(root, "outside")).FullName;
+        var allowed = Path.Combine(source, "allowed.png");
+        var secret = Path.Combine(outside, "secret.png");
+        File.WriteAllBytes(allowed, ModelBuilders.Checker());
+        File.WriteAllBytes(secret, ModelBuilders.Checker());
+        File.WriteAllText(Path.Combine(source, "materials.mtl"), $$"""
+            newmtl allowed
+            map_Kd allowed.png
+            newmtl parent
+            map_Kd ../outside/secret.png
+            newmtl absolute
+            map_Kd {{secret.Replace('\\', '/')}}
+            """);
+        File.WriteAllText(Path.Combine(source, "drawing.obj"), """
+            mtllib materials.mtl
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            vt 0 0
+            vt 1 0
+            vt 0 1
+            o allowed
+            usemtl allowed
+            f 1/1 2/2 3/3
+            o parent
+            usemtl parent
+            f 1/1 2/2 3/3
+            o absolute
+            usemtl absolute
+            f 1/1 2/2 3/3
+            """);
+
+        var model = ModelBuilders.Load(Path.Combine(source, "drawing.obj"), "obj");
+        Assert.Equal(ModelBuilders.Checker(), model.MaterialOf(model.Parts.Single(p => p.Name == "allowed"))!.BaseColorTexture!.Data);
+        Assert.Null(model.MaterialOf(model.Parts.Single(p => p.Name == "parent"))!.BaseColorTexture);
+        Assert.Null(model.MaterialOf(model.Parts.Single(p => p.Name == "absolute"))!.BaseColorTexture);
     }
 
     [Fact]

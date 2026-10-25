@@ -25,10 +25,32 @@ public interface ILocalizer
 /// <summary>Helpers that resolve user-facing names of presets and profiles.</summary>
 public static class LocalizerExtensions
 {
+    /// <summary>
+    /// A file's notice with why in brackets, the reason translated and the system's own words after it:
+    /// "The original was kept… (the file is open in another program)".
+    /// </summary>
+    public static string Notice(this ILocalizer loc, Conversion.FileResult file)
+    {
+        var why = file.NoticeReasonKey is { } key ? loc[key] : null;
+        if (!string.IsNullOrWhiteSpace(file.NoticeDetail))
+            why = why is null ? file.NoticeDetail : $"{why}: {file.NoticeDetail}";
+        return why is null ? loc[file.NoticeKey!] : $"{loc[file.NoticeKey!]} ({why})";
+    }
+
     public static string DisplayName(this ILocalizer loc, Preset preset) =>
         !string.IsNullOrWhiteSpace(preset.Name) ? preset.Name
         : preset.NameKey is not null ? loc[preset.NameKey]
         : preset.TargetFormat.ToUpperInvariant();
+
+    /// <summary>A compact name on the donut, where the target format is already shown underneath.</summary>
+    public static string DonutName(this ILocalizer loc, Preset preset)
+    {
+        if (!string.IsNullOrWhiteSpace(preset.Name) || preset.NameKey is null)
+            return loc.DisplayName(preset);
+        var key = preset.NameKey + ".donut";
+        var text = loc[key];
+        return text == key ? loc.DisplayName(preset) : text;
+    }
 
     /// <summary>
     /// The name on a slice of a group's ring, where the group's name already says what it is about: a built-in

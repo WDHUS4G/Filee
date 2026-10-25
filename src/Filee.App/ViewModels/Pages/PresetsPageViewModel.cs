@@ -43,8 +43,8 @@ public sealed partial class PresetsPageViewModel : ObservableObject, IFitsWindow
         _loc = loc;
         _windows = windows;
         VisiblePresets = new FilteredList<PresetListItem>(Presets, p => [p.Name, p.Target, p.Preset.TargetFormat]);
-        // Groups convert nothing: they live on the donut only (Settings → Toolbar).
-        foreach (var preset in store.Presets.Where(p => !p.IsGroup))
+        // Groups and tools convert nothing: they live on the donut only (Settings → Toolbar).
+        foreach (var preset in store.Presets.Where(p => !p.IsGroup && !p.IsTool))
             Presets.Add(new PresetListItem(preset, loc));
         SelectedPreset = Presets.FirstOrDefault();
     }
@@ -117,6 +117,8 @@ public sealed partial class PresetsPageViewModel : ObservableObject, IFitsWindow
         _store.Presets.Add(preset);
         _store.SaveLibrary();
         var item = new PresetListItem(preset, _loc);
+        // Clear the search filter first so the new preset is visible regardless of what was typed.
+        Search = "";
         Presets.Add(item);
         SelectedPreset = item;
     }

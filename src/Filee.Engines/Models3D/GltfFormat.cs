@@ -23,7 +23,16 @@ internal static class GltfFormat
         ModelRoot root;
         try
         {
-            root = ModelRoot.Load(path, new ReadSettings { Validation = ValidationMode.Skip });
+            // Separate buffers and pictures are read only from the model's folder (ObjFormat.Resolve), never from a
+            // path the file names elsewhere on the disk.
+            var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+            // glTF external resources are URIs: percent-encoded names must be decoded before checking their path.
+            var context = ReadContext.Create(name => File.ReadAllBytes(
+                ObjFormat.Resolve(directory, Uri.UnescapeDataString(name))
+                ?? throw new FileNotFoundException($"{name} is not in the model's folder.", name)));
+            context.Validation = ValidationMode.Skip;
+            using var stream = File.OpenRead(path);
+            root = context.ReadSchema2(stream);
         }
         catch (FileNotFoundException ex)
         {

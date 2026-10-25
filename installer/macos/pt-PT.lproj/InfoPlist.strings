@@ -1,0 +1,3 @@
+/* macOS permission explanations; the operating system chooses the bundle localization. */
+"NSAppleEventsUsageDescription" = "O Filee lê os ficheiros selecionados no Finder quando utilizas um atalho de conversão.";
+"NSInputMonitoringUsageDescription" = "O Filee deteta o atalho de conversão e o gesto de arrastar para mostrar o menu de conversão.";

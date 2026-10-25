@@ -1,0 +1,128 @@
+<!-- Setup and the uninstaller: one soft card (640×420) on a transparent window, with its own window buttons, a
+     drifting background, the state in the middle (crossfading) and the Options sheet sliding over it. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Filee.Setup.ViewModels"
+        xmlns:c="using:Filee.Setup.Controls"
+        x:Class="Filee.Setup.Views.SetupWindow"
+        x:DataType="vm:SetupViewModel"
+        Title="{DynamicResource installer.title}"
+        Icon="avares://Filee.Setup/Assets/Icons/filee.ico"
+        Width="664" Height="444"
+        CanResize="False"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        WindowStartupLocation="CenterScreen">
+  <Border x:Name="Card" Classes="setupcard" Margin="12">
+    <Panel>
+      <c:SoftBackdrop x:Name="Backdrop" Background="{DynamicResource PageBrush}" Accent="{DynamicResource AccentColor}" />
+
+      <DockPanel>
+        <!-- Window bar: drag to move, minimize, close. -->
+        <Grid x:Name="TitleBar" DockPanel.Dock="Top" Height="42" Background="Transparent" ColumnDefinitions="*,Auto,Auto">
+          <TextBlock Classes="caption" Margin="20,0" VerticalAlignment="Center" Text="{DynamicResource installer.title}" />
+          <Button Grid.Column="1" Classes="chrome" Click="OnMinimize" AutomationProperties.Name="{DynamicResource installer.minimize}"
+                  ToolTip.Tip="{DynamicResource installer.minimize}">
+            <Path Data="{DynamicResource Setup.Minimize}" Width="12" Height="12" />
+          </Button>
+          <Button Grid.Column="2" Classes="chrome close" Margin="0,0,8,0" Command="{Binding CancelCommand}"
+                  IsVisible="{Binding !IsProgress}" AutomationProperties.Name="{DynamicResource common.close}"
+                  ToolTip.Tip="{DynamicResource common.close}">
+            <Path Data="{DynamicResource Setup.Close}" Width="12" Height="12" />
+          </Button>
+        </Grid>
+
+        <TransitioningContentControl x:Name="Host" />
+      </DockPanel>
+
+      <!-- Options: slides up over the card. -->
+      <Border x:Name="Sheet" Classes="sheet" Classes.open="{Binding OptionsOpen}" IsEnabled="{Binding OptionsOpen}" Margin="0,42,0,0">
+        <DockPanel Margin="24,16,24,18">
+          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <Button DockPanel.Dock="Right" Classes="link" Command="{Binding ToggleOptionsCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="{DynamicResource installer.options.hide}" />
+                <Path Data="{DynamicResource Setup.ChevronDown}" Width="12" Height="8" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <TextBlock Classes="heading" VerticalAlignment="Center" Text="{DynamicResource installer.options.title}" />
+          </DockPanel>
+          <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <Button DockPanel.Dock="Right" Classes="big accent" MinWidth="160" Content="{Binding PrimaryText}" Command="{Binding InstallCommand}" />
+            <TextBlock Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" Text="{Binding SpaceText}" />
+          </DockPanel>
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,10,0">
+            <StackPanel Spacing="14">
+              <DockPanel>
+                <ComboBox x:Name="LanguageBox" DockPanel.Dock="Right" MinWidth="170" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LanguageItem">
+                      <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock VerticalAlignment="Center" Text="{DynamicResource installer.language}" />
+              </DockPanel>
+
+              <StackPanel Spacing="4" IsVisible="{Binding IsFresh}">
+                <TextBlock Classes="label" Text="{DynamicResource installer.options.folder}" />
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Margin="8,0,0,0" Content="{DynamicResource installer.options.browse}" Command="{Binding BrowseCommand}" />
+                  <TextBox Text="{Binding Folder}" />
+                </DockPanel>
+              </StackPanel>
+              <StackPanel Spacing="2" IsVisible="{Binding IsUpdate}">
+                <TextBlock Classes="label" Text="{DynamicResource installer.options.folder}" />
+                <TextBlock TextWrapping="Wrap" Text="{Binding Folder}" />
+              </StackPanel>
+
+              <StackPanel Spacing="2">
+                <CheckBox Classes="option" IsChecked="{Binding ContextMenu}" IsVisible="{Binding IsFresh}">
+                  <TextBlock Text="{DynamicResource general.context_menu}" />
+                </CheckBox>
+                <CheckBox Classes="option" Margin="28,0,0,2" IsChecked="{Binding ModernMenu}" IsEnabled="{Binding ModernMenuEnabled}">
+                  <CheckBox.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                      <Binding Path="IsFresh" />
+                      <Binding Path="ModernMenuSupported" />
+                    </MultiBinding>
+                  </CheckBox.IsVisible>
+                  <TextBlock Text="{DynamicResource installer.task.modern_menu}" />
+                </CheckBox>
+                <CheckBox Classes="option" IsChecked="{Binding Startup}" IsVisible="{Binding IsFresh}">
+                  <TextBlock Text="{DynamicResource general.start_with_system}" />
+                </CheckBox>
+                <CheckBox Classes="option" IsChecked="{Binding Cli}">
+                  <TextBlock Text="{DynamicResource installer.task.cli}" />
+                </CheckBox>
+                <CheckBox Classes="option" IsChecked="{Binding DesktopIcon}">
+                  <TextBlock Text="{DynamicResource installer.task.desktop_icon}" />
+                </CheckBox>
+                <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,4,0,0" Text="{DynamicResource installer.options.later}" IsVisible="{Binding IsFresh}" />
+                <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,4,0,0" Text="{DynamicResource installer.options.update_note}" IsVisible="{Binding IsUpdate}" />
+              </StackPanel>
+
+              <StackPanel Spacing="4" IsVisible="{Binding HasEngines}">
+                <TextBlock Classes="label" Text="{DynamicResource setup.title}" />
+                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource installer.engines.when}" />
+                <ItemsControl ItemsSource="{Binding Engines}" Focusable="False" Margin="0,4,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:EngineItem">
+                      <CheckBox Classes="option" IsChecked="{Binding Selected}" IsEnabled="{Binding CanSelect}">
+                        <StackPanel>
+                          <TextBlock TextWrapping="Wrap" Text="{Binding Name}" />
+                          <TextBlock Classes="caption" TextWrapping="Wrap" Text="{Binding Detail}" />
+                        </StackPanel>
+                      </CheckBox>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Panel>
+  </Border>
+</Window>

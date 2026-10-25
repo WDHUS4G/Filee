@@ -6,7 +6,9 @@ namespace Filee.Core.Conversion;
 public sealed class ConverterCatalog
 {
     private readonly IReadOnlyList<IConverter> _all;
-    private Dictionary<string, EngineStatus>? _statusCache;
+    private volatile Dictionary<string, EngineStatus>? _statusCache;
+    private int _generation;
+    private readonly Lock _statusLock = new();
     private IReadOnlyList<string> _priority = [];
 
     public ConverterCatalog(IEnumerable<IConverter> converters) => _all = converters.ToList();
@@ -36,17 +38,46 @@ public sealed class ConverterCatalog
         _all.OrderBy(c => PriorityIndex(c)).ThenBy(c => _all.ToList().IndexOf(c)).ToList();
 
     /// <summary>Cached availability of a converter.</summary>
-    public EngineStatus StatusOf(IConverter converter)
-    {
-        _statusCache ??= _all.ToDictionary(c => c.Id, SafeStatus);
-        return _statusCache[converter.Id];
-    }
+    public EngineStatus StatusOf(IConverter converter) => Statuses()[converter.Id];
 
     /// <summary>Re-checks every engine (e.g. after the user changed an engine path).</summary>
     public void Refresh()
     {
+        Interlocked.Increment(ref _generation);
         _statusCache = null;
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Checks every engine on a background thread, so the first conversion menu doesn't wait for them (some start a
+    /// program to read its version). A caller that needs a status meanwhile waits for this check instead of starting
+    /// its own.
+    /// </summary>
+    public Task CheckInBackgroundAsync() => Task.Run(() => Statuses());
+
+    /// <summary>
+    /// The statuses, checked once and shared between threads. A <see cref="Refresh"/> during a check makes it check
+    /// again, so a result from before a settings change is never kept.
+    /// </summary>
+    private Dictionary<string, EngineStatus> Statuses()
+    {
+        if (_statusCache is { } cached)
+            return cached;
+        lock (_statusLock)
+        {
+            while (true)
+            {
+                if (_statusCache is { } done)
+                    return done;
+                var generation = Volatile.Read(ref _generation);
+                var statuses = _all.ToDictionary(c => c.Id, SafeStatus);
+                if (generation == Volatile.Read(ref _generation))
+                {
+                    _statusCache = statuses;
+                    return statuses;
+                }
+            }
+        }
     }
 
     /// <summary>Creates a planner over the currently available converters.</summary>

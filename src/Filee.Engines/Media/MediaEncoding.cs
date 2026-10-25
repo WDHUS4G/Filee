@@ -19,7 +19,7 @@ internal sealed record MediaTarget(string Muxer, string? VideoCodec, string Audi
 internal sealed record FfmpegPass(IReadOnlyList<string> Arguments, double Weight);
 
 /// <summary>Encoding choices and command lines.</summary>
-internal static class MediaEncoding
+internal static partial class MediaEncoding
 {
     /// <summary>
     /// Video formats Filee writes. H.264 + AAC wherever the container allows it: it plays on every browser, phone,
@@ -141,18 +141,30 @@ internal static class MediaEncoding
     /// <param name="workDirectory">Scratch folder (the GIF palette goes there).</param>
     /// <param name="cover">The source's cover for targets FFmpeg can't put a picture stream into (<see cref="CoverArt"/>).</param>
     /// <param name="encoders">The encoders the FFmpeg in use has (<c>ffmpeg -encoders</c>); null assumes the pinned build's.</param>
+    /// <param name="hardware">
+    /// The hardware encoder that passed its probe for <see cref="HardwareCodec"/> of this file; null encodes with x264 /
+    /// x265 / SVT-AV1 (also the retry after a hardware encode failed).
+    /// </param>
+    /// <param name="animationSpeed">Playback speed of an animated GIF or APNG (ImageOptions.PlaybackSpeed); 1 keeps the video's.</param>
+    /// <param name="clip">
+    /// A video target: only this part of the video, cut exactly (the video is always encoded; <see cref="ClipCopy"/>
+    /// copies it instead, cut at key frames).
+    /// </param>
     /// <exception cref="InvalidOperationException">The file lacks the stream the target needs (e.g. no audio track).</exception>
     public static IReadOnlyList<FfmpegPass> Plan(string input, string output, string target, MediaOptions options, MediaInfo info, string workDirectory,
-        CoverExtras? cover = null, IReadOnlySet<string>? encoders = null)
+        CoverExtras? cover = null, IReadOnlySet<string>? encoders = null, HardwareEncoder? hardware = null, double animationSpeed = 1,
+        ClipRange? clip = null)
     {
+        if (clip is { } part && VideoTargets.TryGetValue(target, out var clipTarget))
+            return [new FfmpegPass(Video(input, output, target, clipTarget, options, info, encoders, hardware, part), 1)];
         if (target == "gif")
-            return AnimatedGif(input, output, options, info, workDirectory);
+            return AnimatedGif(input, output, options, info, workDirectory, animationSpeed);
         if (target == "apng")
-            return [new FfmpegPass(AnimatedPng(input, output, options, info), 1)];
+            return [new FfmpegPass(AnimatedPng(input, output, options, info, animationSpeed), 1)];
         if (target == "png")
             return [new FfmpegPass(PosterFrame(input, output, info), 1)];
         if (VideoTargets.TryGetValue(target, out var video))
-            return [new FfmpegPass(Video(input, output, target, video, options, info, encoders), 1)];
+            return [new FfmpegPass(Video(input, output, target, video, options, info, encoders, hardware), 1)];
         if (AudioTargets.TryGetValue(target, out var audio))
             return [new FfmpegPass(Audio(input, output, target, audio, options, info, cover), 1)];
         if (SubtitleTargets.ContainsKey(target))
@@ -160,25 +172,97 @@ internal static class MediaEncoding
         throw new NotSupportedException($"FFmpeg cannot write '{target}'.");
     }
 
+    /// <summary>
+    /// Maps preset image quality (1..100, 100 best) to FFmpeg's mjpeg -q:v parameter (1..31, 1 best, 2..3 visually lossless).
+    /// </summary>
+    public static int QualityToQv(int quality)
+    {
+        var clamped = Math.Clamp(quality, 1, 100);
+        return Math.Clamp((int)Math.Round(2.0 + (100 - clamped) * 29.0 / 99.0), 1, 31);
+    }
+
+    /// <summary>
+    /// Every frame (or every <paramref name="frameInterval"/>th) of the first video stream as numbered pictures in
+    /// <paramref name="outputPattern"/> (an image2 pattern such as <c>frame_%06d.png</c>), for focus stacking and
+    /// picking a shot.
+    /// </summary>
+    /// <remarks>
+    /// Each decoded frame is written once. The image2 muxer would otherwise pace frames to a constant rate and
+    /// duplicate (or drop) frames of a variable frame rate video (phones), so frames pass through with their own
+    /// timestamps; with an interval the select filter leaves gaps, which <c>vfr</c> keeps as they are.
+    /// </remarks>
+    public static List<string> FrameSequence(
+        string input,
+        string outputPattern,
+        string imageExt,
+        VideoStreamInfo? video = null,
+        int quality = 90,
+        int frameInterval = 1)
+    {
+        var select = frameInterval > 1 ? $"select='not(mod(n\\,{frameInterval}))'" : "null";
+        List<string> args =
+        [
+            .. Common, "-i", input, "-map", "0:V:0", "-vf", (video is null ? "" : SquarePixels(video)) + select,
+            "-fps_mode", frameInterval > 1 ? "vfr" : "passthrough",
+        ];
+
+        if (imageExt is "jpg" or "jpeg")
+            args.AddRange(["-c:v", "mjpeg", "-q:v", QualityToQv(quality).ToString(CultureInfo.InvariantCulture)]);
+        else
+            args.AddRange(["-c:v", "png"]);
+
+        args.AddRange(["-f", "image2", "-progress", "pipe:1", outputPattern]);
+        return args;
+    }
+
     // ───────────────────────── Video ─────────────────────────
 
+    /// <summary>
+    /// The codec a hardware encoder would have to write for this file ("h264", "hevc" or "av1"), or null when the preset
+    /// does not ask for hardware encoding, the target is written with another codec (VP9, MPEG-2, …), or the video is
+    /// copied anyway.
+    /// </summary>
+    /// <param name="encode">The video is encoded even where it could be copied (an exact clip).</param>
+    internal static string? HardwareCodec(string target, MediaOptions options, MediaInfo info, bool encode = false) =>
+        options.HardwareEncoding && info.Video is { } video && VideoTargets.ContainsKey(target)
+        && MediaCodecs.TakesHardwareEncoding(target, options.VideoCodec) && (encode || info.RawStream || !CanCopyVideo(target, video, options))
+            ? MediaCodecs.Effective(target, options.VideoCodec) switch
+            {
+                VideoCodec.Hevc => "hevc",
+                VideoCodec.Av1 => "av1",
+                _ => "h264",
+            }
+            : null;
+
     private static List<string> Video(string input, string output, string target, MediaTarget spec, MediaOptions options, MediaInfo info,
-        IReadOnlySet<string>? encoders)
+        IReadOnlySet<string>? encoders, HardwareEncoder? hardware, ClipRange? clip = null)
     {
         var video = info.Video ?? throw new InvalidOperationException("The file has no video stream.");
-        // An input without sound is fine: the output simply has no audio track.
-        var audio = options.RemoveAudio ? null : info.Audio;
+        // An input without sound is fine: the output simply has no audio track. Every track is kept (languages,
+        // commentary, issue #396), except in containers that hold one and in a clip, which keeps the first one as a
+        // copied or edited clip does.
+        IReadOnlyList<AudioStreamInfo> tracks = options.RemoveAudio ? []
+            : clip is not null || SingleAudioTargets.Contains(target) ? [.. info.AudioTracks.Take(1)]
+            : info.AudioTracks;
 
-        List<string> args = [.. Common, "-i", input, "-map", "0:V:0"];
-        if (audio is not null)
-            args.AddRange(["-map", "0:a:0"]);
+        // A clip: FFmpeg seeks the input and decodes from the key frame before the start, so the first frame is exact.
+        List<string> args = [.. Common, .. clip is { } part ? ClipInput(part) : [], "-i", input, "-map", "0:V:0"];
+        for (var i = 0; i < tracks.Count; i++)
+            args.AddRange(["-map", $"0:a:{i}"]);
 
-        if (CanCopyVideo(target, video, options))
+        if (clip is null && !info.RawStream && CanCopyVideo(target, video, options))
         {
             args.AddRange(["-c:v", "copy"]);
             // Apple plays HEVC in MP4/MOV only under the "hvc1" tag (FFmpeg keeps "hev1" from some sources).
             if (video.Codec == "hevc" && target is "mp4" or "m4v" or "mov")
                 args.AddRange(["-tag:v", "hvc1"]);
+        }
+        else if (hardware is not null && HardwareCodec(target, options, info, encode: clip is not null) == hardware.Codec)
+        {
+            // VA-API's device is a global option, so it goes before the input.
+            args.InsertRange(Common.Length, HardwareVideo.InputArguments(hardware));
+            args.AddRange(["-vf", ScaleFilter(options.MaxHeight) + HardwareVideo.FilterSuffix(hardware, HardwareVideo.TenBit(hardware.Codec, video))]);
+            args.AddRange(HardwareVideo.CodecArguments(hardware, target, options.Quality, video, options.MaxHeight));
         }
         else
         {
@@ -187,12 +271,17 @@ internal static class MediaEncoding
             args.AddRange(VideoCodecArguments(target, VideoEncoder(target, spec.VideoCodec!, options.VideoCodec, encoders), options.Quality, video, pal));
         }
 
-        if (audio is null)
+        if (tracks.Count == 0)
             args.Add("-an");
-        else if (CanCopyAudio(target, audio, options))
-            args.AddRange(["-c:a", "copy"]);
-        else
-            args.AddRange(AudioCodecArguments(target, spec.AudioCodec, options, audio, inVideo: true));
+        for (var i = 0; i < tracks.Count; i++)
+        {
+            // Each track on its own: copied where the container takes it, else encoded for its own channel count. A
+            // clip's sound is encoded too: copied, it would start with the packets before the seek point (a second early).
+            var trackArgs = clip is null && CanCopyAudio(target, tracks[i], options)
+                ? ["-c:a", "copy"]
+                : AudioCodecArguments(target, spec.AudioCodec, options, tracks[i], inVideo: true);
+            args.AddRange(tracks.Count == 1 ? trackArgs : ForAudioTrack(trackArgs, i));
+        }
 
         args.AddRange(MetadataArguments());
         args.AddRange(ContainerArguments(target));
@@ -201,13 +290,77 @@ internal static class MediaEncoding
         return args;
     }
 
+    /// <summary>Containers that hold a single audio track: the first one is kept.</summary>
+    private static readonly HashSet<string> SingleAudioTargets = ["flv", "dv"];
+
+    /// <summary>Audio options addressed to one output track (<c>-b:a</c> → <c>-b:a:2</c>, <c>-ac</c> → <c>-ac:a:2</c>).</summary>
+    internal static IEnumerable<string> ForAudioTrack(IReadOnlyList<string> args, int track) =>
+        args.Select((arg, i) => arg switch
+        {
+            // Values are never options: only the names are addressed.
+            _ when i > 0 && args[i - 1].StartsWith('-') && !arg.StartsWith('-') => arg,
+            "-c:a" or "-b:a" or "-q:a" => $"{arg}:{track}",
+            "-ac" or "-ar" => $"{arg}:a:{track}",
+            _ => arg,
+        });
+
+    /// <summary>
+    /// A part of a video copied as it is (<c>-c copy</c>): done in a moment and nothing is lost, but a copy can only
+    /// start at a key frame, so the clip starts at the last one before <see cref="ClipRange.Start"/> (up to a few
+    /// seconds early). The first video stream and the first audio track are kept (none with
+    /// <see cref="MediaOptions.RemoveAudio"/>), as in an exact or edited clip; the
+    /// other options only apply to an exact clip, which is encoded.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The file has no video stream.</exception>
+    /// <exception cref="NotSupportedException">FFmpeg cannot write <paramref name="target"/>.</exception>
+    internal static List<string> ClipCopy(string input, string output, string target, ClipRange clip, MediaOptions options, MediaInfo info)
+    {
+        var video = info.Video ?? throw new InvalidOperationException("The file has no video stream.");
+        if (!VideoTargets.TryGetValue(target, out var spec))
+            throw new NotSupportedException($"FFmpeg cannot write '{target}'.");
+        var audio = !options.RemoveAudio && info.Audio is not null;
+
+        List<string> args = [.. Common, .. ClipInput(clip), "-i", input, "-map", "0:V:0"];
+        if (audio)
+            args.AddRange(["-map", "0:a:0"]);
+        args.AddRange(["-c", "copy"]);
+        // Apple plays HEVC in MP4/MOV only under the "hvc1" tag (FFmpeg keeps "hev1" from some sources).
+        if (video.Codec == "hevc" && target is "mp4" or "m4v" or "mov")
+            args.AddRange(["-tag:v", "hvc1"]);
+        if (!audio)
+            args.Add("-an");
+        // The copied packets keep their timestamps from the key frame on: shifted so the clip starts at 0.
+        args.AddRange(["-avoid_negative_ts", "make_zero"]);
+        args.AddRange(MetadataArguments());
+        args.AddRange(ContainerArguments(target));
+        args.AddRange(["-max_muxing_queue_size", "4096", "-f", spec.Muxer, "-progress", "pipe:1", output]);
+        return args;
+    }
+
+    /// <summary>
+    /// Input options that read only <paramref name="clip"/> of the file: <c>-ss</c> and <c>-to</c> before <c>-i</c>,
+    /// both positions in the source.
+    /// </summary>
+    internal static string[] ClipInput(ClipRange clip) => ["-ss", ClipRange.Ffmpeg(clip.Start), "-to", ClipRange.Ffmpeg(clip.End)];
+
+    /// <summary>
+    /// One frame at <paramref name="seconds"/> as a JPEG at most <paramref name="maxHeight"/> pixels high (square
+    /// pixels, turned upright): the timeline and the large picture of the clip window.
+    /// </summary>
+    internal static List<string> FrameAt(string input, double seconds, string output, int maxHeight, VideoStreamInfo? video) =>
+    [
+        .. Common, "-ss", ClipRange.Ffmpeg(seconds), "-i", input, "-map", "0:V:0",
+        "-vf", (video is null ? "" : SquarePixels(video)) + $"scale=w=-2:h='trunc(min(ih,{Math.Max(16, maxHeight)})/2)*2'",
+        "-frames:v", "1", "-update", "1", "-c:v", "mjpeg", "-q:v", "3", "-f", "image2", output,
+    ];
+
     /// <summary>
     /// Codecs a container takes as they are. A video whose streams are listed for the target is only rewrapped
     /// (stream copy): no quality loss, HDR and 10-bit kept, seconds instead of minutes. iPhone videos (HEVC or H.264
     /// with AAC in MOV) become MP4 this way. Only codecs the target's usual players handle are listed: MP4/MOV keep to
     /// what Apple devices and browsers play, WebM to what the WebM specification allows.
     /// </summary>
-    private static readonly Dictionary<string, (HashSet<string> Video, HashSet<string> Audio)> Remuxable = new()
+    internal static readonly Dictionary<string, (HashSet<string> Video, HashSet<string> Audio)> Remuxable = new()
     {
         ["mp4"] = (["h264", "hevc"], ["aac", "alac", "ac3", "eac3", "mp3"]),
         ["m4v"] = (["h264", "hevc"], ["aac", "alac", "ac3", "eac3", "mp3"]),
@@ -302,7 +455,7 @@ internal static class MediaEncoding
     /// <summary>PAL (25 fps) for 25/50 fps sources, NTSC (29.97 fps) for everything else.</summary>
     internal static bool IsPal(double fps) => Math.Abs(fps - 25) < 0.5 || Math.Abs(fps - 50) < 1 || Math.Abs(fps - 12.5) < 0.3;
 
-    private static IEnumerable<string> VideoCodecArguments(string target, string codec, MediaQuality quality, VideoStreamInfo video, bool pal)
+    internal static IEnumerable<string> VideoCodecArguments(string target, string codec, MediaQuality quality, VideoStreamInfo video, bool pal)
     {
         // Constant quantizer for the MPEG-style codecs: 2 is the best useful value, 4 good, 7 visibly compressed.
         var quantizer = Text(Choose(quality, 2, 4, 7));
@@ -367,8 +520,14 @@ internal static class MediaEncoding
     internal static string[] HighBitDepthArguments(VideoStreamInfo video)
     {
         var tenBit = video.IsHighBitDepth || video.IsHdr;
-        List<string> args = ["-pix_fmt", tenBit ? "yuv420p10le" : "yuv420p"];
-        if (tenBit && video.Color is { } color)
+        return ["-pix_fmt", tenBit ? "yuv420p10le" : "yuv420p", .. tenBit ? ColorArguments(video) : []];
+    }
+
+    /// <summary>The source's colour tags (primaries, transfer, matrix), for 10-bit and HDR encodes.</summary>
+    internal static List<string> ColorArguments(VideoStreamInfo video)
+    {
+        List<string> args = [];
+        if (video.Color is { } color)
         {
             if (color.Primaries is { } primaries)
                 args.AddRange(["-color_primaries", primaries]);
@@ -377,7 +536,7 @@ internal static class MediaEncoding
             if (color.Matrix is { } matrix)
                 args.AddRange(["-colorspace", matrix]);
         }
-        return [.. args];
+        return args;
     }
 
     /// <summary><c>-r</c> for a rate, nothing when the source rate is unknown (FFmpeg then keeps its own guess).</summary>
@@ -408,7 +567,7 @@ internal static class MediaEncoding
         return den == 1 ? num.ToString(CultureInfo.InvariantCulture) : $"{num}/{den}";
     }
 
-    private static IEnumerable<string> ContainerArguments(string target) => target switch
+    internal static IEnumerable<string> ContainerArguments(string target) => target switch
     {
         // Moves the index to the front so playback (and web streaming) can start before the file is loaded.
         "mp4" or "m4v" or "mov" or "3gp" or "3g2" or "m4a" or "m4b" => ["-movflags", "+faststart"],
@@ -423,7 +582,7 @@ internal static class MediaEncoding
         _ => [],
     };
 
-    private static IEnumerable<string> MetadataArguments(int from = 0)
+    internal static IEnumerable<string> MetadataArguments(int from = 0)
     {
         // Keep title, artist, dates, … (chapters are kept by default); an empty value removes a tag.
         yield return "-map_metadata";
@@ -450,12 +609,73 @@ internal static class MediaEncoding
             args.AddRange(["-map", $"0:{cover}", "-c:v", "copy", "-disposition:v:0", "attached_pic"]);
         if (extras is { AttachmentFile: { } picture, AttachmentMime: { } mime })
             args.AddRange(["-attach", picture, "-metadata:s:t", "mimetype=" + mime, "-metadata:s:t", "filename=" + Path.GetFileName(picture)]);
-        var codec = AudioEncoder(target, spec.AudioCodec, options);
-        args.AddRange(AudioCodecArguments(target, codec, options, audio, inVideo: false));
-        args.AddRange(ChannelAndRateArguments(target, codec, options, audio.SampleRate));
+        if (CanCopyIntoAudio(target, audio, options))
+        {
+            // "Extract audio": the phone video's AAC goes into the M4A as it is, without a second encode.
+            args.AddRange(["-c:a", "copy"]);
+        }
+        else
+        {
+            var codec = AudioEncoder(target, spec.AudioCodec, options);
+            args.AddRange(AudioCodecArguments(target, codec, options, audio, inVideo: false));
+            args.AddRange(ChannelAndRateArguments(target, codec, options, audio.SampleRate));
+        }
         args.AddRange(MetadataArguments(extras?.MetadataFile is null ? 0 : 1));
         args.AddRange(ContainerArguments(target));
         args.AddRange(["-f", spec.Muxer, "-progress", "pipe:1", output]);
+        return args;
+    }
+
+    /// <summary>Audio codecs an audio target takes as they are (<see cref="MediaOptions.CopyAudioWhenPossible"/>).</summary>
+    private static readonly Dictionary<string, HashSet<string>> CopyableAudio = new()
+    {
+        ["m4a"] = ["aac", "alac"],
+        ["m4b"] = ["aac", "alac"],
+        ["aac"] = ["aac"],
+        ["mp3"] = ["mp3"],
+        ["flac"] = ["flac"],
+        ["opus"] = ["opus"],
+        ["ogg"] = ["vorbis"],
+    };
+
+    /// <summary>
+    /// True when the preset copies sound it can (<see cref="MediaOptions.CopyAudioWhenPossible"/>) and this sound can be
+    /// copied into <paramref name="target"/>: the target takes its codec (only ALAC when the preset asks for Apple
+    /// Lossless), and no bitrate, channel count or Small quality asks for an encode.
+    /// </summary>
+    internal static bool CanCopyIntoAudio(string target, AudioStreamInfo audio, MediaOptions options)
+    {
+        if (!options.CopyAudioWhenPossible || options.Quality == MediaQuality.Small || options.AudioBitrateKbps > 0
+            || options.AudioChannels is 1 or 2 && options.AudioChannels != audio.Channels
+            || audio.Codec is not { } codec || !CopyableAudio.TryGetValue(target, out var codecs) || !codecs.Contains(codec))
+            return false;
+        return MediaCodecs.Effective(target, options.AudioCodec) != Core.Presets.AudioCodec.Alac || codec == "alac";
+    }
+
+    // ───────────────────────── Without metadata ─────────────────────────
+
+    /// <summary>
+    /// "Remove metadata": the file's video, audio and subtitle streams copied as they are into the same format, with no
+    /// tags (title, artist, dates, location, camera, encoder), per-stream tags or chapters. Data tracks (an iPhone's
+    /// timed location and camera metadata) are left out; album art stays.
+    /// </summary>
+    public static List<string> WithoutMetadata(string input, string output, string target, MediaInfo info)
+    {
+        var spec = VideoTargets.TryGetValue(target, out var video) ? video
+            : AudioTargets.TryGetValue(target, out var audio) ? audio
+            : throw new NotSupportedException($"FFmpeg cannot write '{target}'.");
+        List<string> args = [.. Common, "-i", input];
+        // A video's pictures without cover art (0:V); an audio file's cover art (0:v) stays with it.
+        args.AddRange(["-map", info.Video is not null ? "0:V?" : "0:v?", "-map", "0:a?", "-map", "0:s?", "-c", "copy"]);
+        if (info.Video?.Codec == "hevc" && target is "mp4" or "m4v" or "mov")
+            args.AddRange(["-tag:v", "hvc1"]);
+        args.AddRange(["-map_metadata", "-1", "-map_metadata:s", "-1", "-map_chapters", "-1", "-fflags", "+bitexact"]);
+        // Attachments are an MKV's subtitle fonts (without them styled subtitles fall back to another font); each needs
+        // its own file name and type tags. Only when there are any: FFmpeg refuses a specifier that matches nothing.
+        if (info.HasAttachments)
+            args.AddRange(["-map", "0:t", "-map_metadata:s:t", "0:s:t"]);
+        args.AddRange(ContainerArguments(target));
+        args.AddRange(["-max_muxing_queue_size", "4096", "-f", spec.Muxer, "-progress", "pipe:1", output]);
         return args;
     }
 
@@ -631,11 +851,11 @@ internal static class MediaEncoding
     /// the palette in the same run would keep every frame in memory until the end. Frame rate and width are limited
     /// by the quality setting because GIF stores every frame uncompressed-ish and grows fast.
     /// </summary>
-    private static List<FfmpegPass> AnimatedGif(string input, string output, MediaOptions options, MediaInfo info, string workDirectory)
+    private static List<FfmpegPass> AnimatedGif(string input, string output, MediaOptions options, MediaInfo info, string workDirectory, double speed)
     {
         var video = info.Video ?? throw new InvalidOperationException("The file has no video stream.");
         var quality = options.Quality;
-        var chain = GifFrames(video, options.MaxHeight, fps: Choose(quality, 15, 12, 10), maxWidth: Choose(quality, 640, 480, 320));
+        var chain = GifFrames(video, options.MaxHeight, fps: Choose(quality, 15, 12, 10), maxWidth: Choose(quality, 640, 480, 320), speed);
         var palette = Path.Combine(workDirectory, $"palette-{Guid.NewGuid():N}.png");
         var colors = Choose(quality, 256, 256, 128);
         // Error diffusion looks best; ordered (Bayer) dithering compresses much better because it does not flicker.
@@ -663,11 +883,11 @@ internal static class MediaEncoding
     /// Animated PNG with FFmpeg's APNG encoder and muxer: full colour (24-bit RGB, no palette pass), looping, with the
     /// frame rate and width limits of GIF, since every frame is stored losslessly.
     /// </summary>
-    private static List<string> AnimatedPng(string input, string output, MediaOptions options, MediaInfo info)
+    private static List<string> AnimatedPng(string input, string output, MediaOptions options, MediaInfo info, double speed)
     {
         var video = info.Video ?? throw new InvalidOperationException("The file has no video stream.");
         var quality = options.Quality;
-        var chain = GifFrames(video, options.MaxHeight, fps: Choose(quality, 15, 12, 10), maxWidth: Choose(quality, 640, 480, 320));
+        var chain = GifFrames(video, options.MaxHeight, fps: Choose(quality, 15, 12, 10), maxWidth: Choose(quality, 640, 480, 320), speed);
         return
         [
             .. Common, "-i", input, "-map", "0:V:0", "-vf", chain, "-an",
@@ -675,15 +895,22 @@ internal static class MediaEncoding
         ];
     }
 
-    /// <summary>Frame rate, square pixels and size of the GIF frames (never upscaled).</summary>
-    private static string GifFrames(VideoStreamInfo video, int maxHeight, int fps, int maxWidth)
+    /// <summary>
+    /// Playback speed, frame rate, square pixels and size of the GIF frames (never upscaled). The speed changes the
+    /// timestamps before the frame rate is taken, so a faster clip keeps the frame rate by leaving frames out, and a
+    /// slower one repeats frames where the video has too few.
+    /// </summary>
+    private static string GifFrames(VideoStreamInfo video, int maxHeight, int fps, int maxWidth, double speed)
     {
         var height = maxHeight > 0 ? $"'min(ih,{Math.Max(16, maxHeight)})'" : "ih";
-        return $"fps={fps},{SquarePixels(video)}scale=w='min(iw,{maxWidth})':h={height}:force_original_aspect_ratio=decrease:flags=lanczos";
+        var timing = double.IsFinite(speed) && speed is > 0 and not 1
+            ? $"setpts=PTS/{speed.ToString("0.###", CultureInfo.InvariantCulture)},"
+            : "";
+        return $"{timing}fps={fps},{SquarePixels(video)}scale=w='min(iw,{maxWidth})':h={height}:force_original_aspect_ratio=decrease:flags=lanczos";
     }
 
     /// <summary>Images have no pixel aspect ratio: anamorphic video (DV, DVD) is stretched to square pixels first.</summary>
-    private static string SquarePixels(VideoStreamInfo video) =>
+    internal static string SquarePixels(VideoStreamInfo video) =>
         Math.Abs(video.SampleAspect - 1) > 0.01 ? "scale=w='trunc(iw*sar/2)*2':h=ih,setsar=1," : "";
 
     // ───────────────────────── Still frame ─────────────────────────
@@ -756,7 +983,7 @@ internal static class MediaEncoding
 
     // ───────────────────────── Helpers ─────────────────────────
 
-    private static T Choose<T>(MediaQuality quality, T high, T balanced, T small) => quality switch
+    internal static T Choose<T>(MediaQuality quality, T high, T balanced, T small) => quality switch
     {
         MediaQuality.High => high,
         MediaQuality.Small => small,
@@ -765,7 +992,7 @@ internal static class MediaEncoding
 
     private static string Text(int value) => value.ToString(CultureInfo.InvariantCulture);
 
-    private static int Even(double value) => Math.Max(2, (int)Math.Round(value / 2) * 2);
+    internal static int Even(double value) => Math.Max(2, (int)Math.Round(value / 2) * 2);
 
     /// <summary>The even number at or below <paramref name="value"/> (a tiny rounding margin keeps 1080.0000001 at 1080).</summary>
     private static int EvenDown(double value) => Math.Max(2, (int)Math.Floor(value / 2 + 1e-6) * 2);

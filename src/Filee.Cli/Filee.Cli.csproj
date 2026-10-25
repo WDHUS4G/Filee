@@ -9,11 +9,17 @@
     <AssemblyName>filee-cli</AssemblyName>
     <RootNamespace>Filee.Cli</RootNamespace>
     <ApplicationIcon>..\Filee.App\Assets\Icons\filee.ico</ApplicationIcon>
+    <!-- The Recycle Bin is IFileOperation, a COM interface (Filee.Platform.Windows). -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Filee.Core\Filee.Core.csproj" />
     <ProjectReference Include="..\Filee.Engines\Filee.Engines.csproj" />
+    <!-- "Replace the original" moves originals to the Recycle Bin / Trash (MoveToTrash), as the app does. -->
+    <ProjectReference Include="..\Filee.Platform.Windows\Filee.Platform.Windows.csproj" />
+    <ProjectReference Include="..\Filee.Platform.Linux\Filee.Platform.Linux.csproj" />
+    <ProjectReference Include="..\Filee.Platform.MacOS\Filee.Platform.MacOS.csproj" />
   </ItemGroup>
 
   <!-- Error messages and built-in preset names, in English (the app's translation file). -->

@@ -85,6 +85,34 @@ internal sealed partial class HwpxWriter
                "</hp:pic>";
     }
 
+    // ───────────────────────── Equations ─────────────────────────
+
+    /// <summary>Space left and right of an equation (as 한글 inserts them).</summary>
+    private const int EquationMargin = 56;
+
+    /// <summary>
+    /// A 한글 equation laid out like a character. The box is the size rhwp lays the script out at (see
+    /// EquationScript), so it draws the equation unstretched; baseLine is where the text line runs, in percent of the
+    /// height from the top.
+    /// </summary>
+    private string Equation(HEquation equation, string charPrBase)
+    {
+        var size = Math.Max(100, equation.Format.Size ?? BaseSize(charPrBase));
+        var box = EquationScript.Measure(equation.Math, size);
+        var width = Math.Max(1, (int)Math.Ceiling(box.Width));
+        var height = Math.Max(1, (int)Math.Ceiling(box.Height));
+        var baseline = box.Height > 0 ? Math.Clamp((int)Math.Round(box.Baseline * 100 / box.Height), 0, 100) : 85;
+        var id = NextId();
+        return $"<hp:equation id=\"{id}\" zOrder=\"{_zOrder++}\" numberingType=\"EQUATION\" textWrap=\"TOP_AND_BOTTOM\" textFlow=\"BOTH_SIDES\" lock=\"0\" dropcapstyle=\"None\" " +
+               $"version=\"Equation Version 60\" baseLine=\"{baseline}\" textColor=\"{equation.Format.Color ?? "#000000"}\" baseUnit=\"{size}\" lineMode=\"CHAR\" font=\"HYhwpEQ\">" +
+               $"<hp:sz width=\"{width}\" widthRelTo=\"ABSOLUTE\" height=\"{height}\" heightRelTo=\"ABSOLUTE\" protect=\"0\"/>" +
+               Position(null) +
+               // The comment (alternative text) is the linear form. Never an empty element: rhwp reads an empty
+               // <hp:shapeComment/> of an equation up to the next closing tag and loses the rest of the section.
+               $"<hp:outMargin left=\"{EquationMargin}\" right=\"{EquationMargin}\" top=\"0\" bottom=\"0\"/><hp:shapeComment>{Escape(equation.Text)}</hp:shapeComment>" +
+               $"<hp:script>{Escape(EquationScript.Script(equation.Math))}</hp:script></hp:equation>";
+    }
+
     /// <summary>hp:pos: inline objects are laid out like a character; floating ones use the anchor.</summary>
     private string Position(HAnchor? anchor)
     {

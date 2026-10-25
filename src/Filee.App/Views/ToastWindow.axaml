@@ -39,6 +39,32 @@
         </Animation>
       </Style.Animations>
     </Style>
+    <!-- Download badge above the progress bar while files from a browser are saved: pops in, disappears when done. -->
+    <Style Selector="Border.download-badge">
+      <Style.Animations>
+        <Animation Duration="0:0:0.22" Easing="BackEaseOut" FillMode="Forward">
+          <KeyFrame Cue="0%">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="ScaleTransform.ScaleX" Value="0.6" />
+            <Setter Property="ScaleTransform.ScaleY" Value="0.6" />
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="ScaleTransform.ScaleX" Value="1" />
+            <Setter Property="ScaleTransform.ScaleY" Value="1" />
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="Window.reduced-motion Border.download-badge">
+      <Style.Animations>
+        <Animation Duration="0:0:0.001" FillMode="Forward">
+          <KeyFrame Cue="100%">
+            <Setter Property="Opacity" Value="1" />
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
     <Style Selector="ProgressBar">
       <Setter Property="CornerRadius" Value="999" />
       <Setter Property="MinHeight" Value="6" />
@@ -57,11 +83,20 @@
         <Border Classes="card" Padding="14,12">
           <StackPanel Spacing="8">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding DismissCommand}" Padding="4" VerticalAlignment="Top">
+              <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding DismissCommand}" Padding="4" VerticalAlignment="Top"
+                      AutomationProperties.Name="{DynamicResource common.close}">
                 <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
               </Button>
               <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
             </DockPanel>
+            <Border Classes="download-badge" IsVisible="{Binding IsDownloading}" HorizontalAlignment="Left"
+                    Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
+                    CornerRadius="{DynamicResource SoftRadius}" Padding="8,2" Margin="0,0,0,-4" RenderTransformOrigin="0%,100%">
+              <Border.RenderTransform>
+                <ScaleTransform />
+              </Border.RenderTransform>
+              <TextBlock Text="{Binding DownloadText}" FontSize="11" FontWeight="SemiBold" />
+            </Border>
             <ProgressBar Value="{Binding Progress}" Maximum="100" IsVisible="{Binding IsRunning}" />
             <DockPanel>
               <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
@@ -83,6 +118,17 @@
             </DockPanel>
             <TextBlock Classes="caption danger" Text="{Binding ErrorDetails}" TextWrapping="Wrap" MaxLines="4"
                        IsVisible="{Binding HasErrors}" />
+            <TextBlock Classes="caption" Text="{Binding Notices}" TextWrapping="Wrap" MaxLines="4"
+                       IsVisible="{Binding HasNotices}" />
+            <DockPanel IsVisible="{Binding HasMissingFonts}">
+              <Button DockPanel.Dock="Right" Padding="10,4" Click="OnGetFonts"
+                      Content="{DynamicResource toast.get_fonts}" IsVisible="{Binding CanGetFonts}" />
+              <TextBlock Classes="caption" Text="{Binding MissingFontsText}" TextWrapping="Wrap" MaxLines="3"
+                         Margin="0,0,8,0" VerticalAlignment="Center" />
+            </DockPanel>
+            <!-- Files of a type Filee doesn't know: open the GitHub "Format request" form (FormatRequest). -->
+            <Button HorizontalAlignment="Left" Padding="10,4" Click="OnRequestFormat"
+                    IsVisible="{Binding CanRequestFormat}" Content="{DynamicResource format_request.request}" />
           </StackPanel>
         </Border>
       </DataTemplate>

@@ -2,12 +2,15 @@
 // (HwpxConverter) and the DOCX writer (DocxWriterConverter) take their input formats from here, so a new reader is one
 // line in BuiltIn and both writers (and every route through them) pick it up.
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using Filee.Engines.Ebooks;
+using Filee.Engines.Email;
 using Filee.Engines.Hwp.Hwpx.Docx;
 using Filee.Engines.Hwp.Hwpx.Pptx;
 using Filee.Engines.Infrastructure;
+using Filee.Engines.Ofd;
 using Filee.Engines.Office;
 using Filee.Engines.Office.Sheets;
 using Filee.Engines.Pdf;
@@ -42,11 +45,14 @@ internal static class DocumentReaders
         ["pptx"] = PptxReader.Read,
         ["pptm"] = PptxReader.Read,
         ["potx"] = PptxReader.Read,
+        ["potm"] = PptxReader.Read,
         ["ppsx"] = PptxReader.Read,
         ["pdf"] = PdfDocumentReader.Read,
+        ["ofd"] = OfdReader.Read,
         // HWP comes here as HWPX, converted by rhwp first (the route planner adds that step).
         ["hwpx"] = HwpxReader.Read,
         ["html"] = HtmlReader.Read,
+        ["mhtml"] = MhtmlArchive.ReadDocument, // the saved page with its pictures, sanitized like an e-mail
         ["epub"] = EpubReader.Read,
         ["kepub"] = EpubReader.Read, // a Kobo EPUB: its koboSpan markup is plain spans to the HTML reader
         ["mobi"] = MobiReader.Read,
@@ -100,9 +106,13 @@ internal static class DocumentReaders
 
     /// <summary>Reads <paramref name="path"/> (of format <paramref name="format"/>) into the document model.</summary>
     /// <param name="workDirectory">Scratch folder of the job: extracted pictures go into a new folder inside it.</param>
-    public static async Task<HDocument> ReadAsync(string path, string format, string workDirectory, CancellationToken cancellationToken)
+    /// <param name="ocrLayer">A PDF's OCR layer is its text (<see cref="PdfDocumentReader.ReadWithOcrLayer"/>).</param>
+    public static async Task<HDocument> ReadAsync(string path, string format, string workDirectory, CancellationToken cancellationToken,
+        bool ocrLayer = false)
     {
         var media = Path.Combine(workDirectory, $"media-{Guid.NewGuid():N}");
+        if (ocrLayer && format == "pdf")
+            return await Task.Run(() => PdfDocumentReader.ReadWithOcrLayer(path, media), cancellationToken);
         if (BuiltIn.TryGetValue(format, out var reader))
             return await Task.Run(() => reader(path, media), cancellationToken);
         if (ThroughPandoc.TryGetValue(format, out var pandocReader))
@@ -165,20 +175,15 @@ internal static class DocumentReaders
         return document;
     }
 
-    /// <summary>UTF-8 (with or without BOM) or UTF-16 with BOM; anything else is read as CP949, common for Korean text.</summary>
-    internal static string DecodeText(byte[] bytes)
-    {
-        if (bytes is [0xFF, 0xFE, ..] or [0xFE, 0xFF, ..])
-            return new StreamReader(new MemoryStream(bytes), detectEncodingFromByteOrderMarks: true).ReadToEnd();
-        try
-        {
-            var text = new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(bytes);
-            return text.Length > 0 && text[0] == '﻿' ? text[1..] : text;
-        }
-        catch (DecoderFallbackException)
-        {
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            return Encoding.GetEncoding(949).GetString(bytes);
-        }
-    }
+    /// <summary>
+    /// Text in whatever encoding its PC used, the way subtitles are read (<see cref="Subtitles.SubtitleEncoding"/>): by
+    /// its byte order mark, as UTF-8 when it is valid UTF-8, as CP949 when the bytes look Korean or, on Korean Windows,
+    /// are valid CP949; else in the PC's own code page (GBK on Chinese Windows, #491; Shift-JIS on Japanese; Windows-1252
+    /// on Western). A <c>charset=</c> in the text is content here, not the file's encoding, so it isn't followed.
+    /// </summary>
+    internal static string DecodeText(byte[] bytes) => DecodeText(bytes, CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+
+    /// <summary><see cref="DecodeText(byte[])"/> with the PC's ANSI code page given (for tests).</summary>
+    internal static string DecodeText(byte[] bytes, int ansiCodePage) =>
+        Subtitles.SubtitleEncoding.Decode(bytes, ansiCodePage, declaredCharset: false);
 }

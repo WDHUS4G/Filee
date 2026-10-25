@@ -58,6 +58,25 @@ public class LibreOfficeRouteTests(EngineFixture fx) : IClassFixture<EngineFixtu
         Assert.Equal("libreoffice", Assert.Single(chosen.Plan(from, "pdf")!.Steps).Converter.Id);
     }
 
+    [Theory]
+    [InlineData("docx")]
+    [InlineData("txt")]
+    [InlineData("md")]
+    [InlineData("html")]
+    [InlineData("xlsx")]
+    [InlineData("pptx")]
+    [InlineData("hwpx")]
+    public void Text_that_needs_shaping_goes_to_libreoffice_whatever_is_chosen(string from)
+    {
+        // Issues #185 and #202: rhwp draws Gujarati and Arabic unshaped, so such a document never takes a route through it.
+        var route = Planner(slides: false, hwpToPdf: false).Plan(from, "pdf", shaping: true);
+
+        Assert.NotNull(route);
+        Assert.DoesNotContain(route.Steps, s => s.Converter.Id == "rhwp");
+        Assert.Contains(route.Steps, s => s.Converter.Id == "libreoffice");
+        Assert.DoesNotContain(Planner(slides: false, hwpToPdf: false).Plan(from, "png", shaping: true)!.Steps, s => s.Converter.Id == "rhwp");
+    }
+
     [Fact]
     public void Each_choice_moves_only_its_own_formats()
     {

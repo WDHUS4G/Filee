@@ -132,6 +132,83 @@ internal static class NativeMethods
         SendVoid(window, sel_registerName("orderFrontRegardless"));
     }
 
+    /// <summary>
+    /// Adds <paramref name="types"/> to the drag types of every view in <paramref name="window"/> that already takes
+    /// drags (Avalonia's view, registered for public.data only). AppKit sends a drag to a view only when it offers one
+    /// of the view's types, and some apps' file drags may not conform to public.data.
+    /// </summary>
+    internal static void AddDraggedTypes(nint window, IReadOnlyList<string> types)
+    {
+        using var pool = new AutoreleasePool();
+        AddDraggedTypesTo(Send(window, sel_registerName("contentView")), types);
+    }
+
+    private static void AddDraggedTypesTo(nint view, IReadOnlyList<string> types)
+    {
+        if (view == 0)
+            return;
+        var registered = Send(view, sel_registerName("registeredDraggedTypes"));
+        if (registered != 0 && Send(registered, sel_registerName("count")) > 0)
+        {
+            // The whole list: AppKit doesn't document whether registering adds to the view's types or replaces them.
+            var all = Send(objc_getClass("NSMutableArray"), sel_registerName("arrayWithArray:"), registered);
+            foreach (var type in types)
+            {
+                var name = CFStringCreateWithCString(0, type, 0x08000100);
+                if (!SendBool(all, sel_registerName("containsObject:"), name))
+                    SendVoid(all, sel_registerName("addObject:"), name);
+                CFRelease(name);
+            }
+            SendVoid(view, sel_registerName("registerForDraggedTypes:"), all);
+        }
+        var subviews = Send(view, sel_registerName("subviews"));
+        var count = subviews == 0 ? 0 : Send(subviews, sel_registerName("count"));
+        for (nint index = 0; index < count; index++)
+            AddDraggedTypesTo(Send(subviews, sel_registerName("objectAtIndex:"), index), types);
+    }
+
+    /// <summary>
+    /// Sets whether Filee appears in the Dock by changing the application activation policy. Changing the policy
+    /// deactivates the app, so activate it again when the change succeeds.
+    /// </summary>
+    internal static bool SetShowInDock(bool show)
+    {
+        using var pool = new AutoreleasePool();
+        var application = Send(objc_getClass("NSApplication"), sel_registerName("sharedApplication"));
+        var succeeded = SendBoolWithInteger(application, sel_registerName("setActivationPolicy:"), show ? 0 : 1);
+        if (succeeded)
+            SendInteger(application, sel_registerName("activateIgnoringOtherApps:"), 1);
+        return succeeded;
+    }
+
+    /// <summary>
+    /// NSFileManager trashItemAtURL: the file goes to the Trash of its volume, where Finder can put it back. Null when
+    /// it worked, else the reason macOS gives.
+    /// </summary>
+    public static Filee.Core.Platform.TrashRefusal? MoveToTrash(string path)
+    {
+        using var pool = new AutoreleasePool();
+        var text = CFStringCreateWithCString(0, Path.GetFullPath(path), 0x08000100);
+        try
+        {
+            var url = Send(objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"), text);
+            var manager = Send(objc_getClass("NSFileManager"), sel_registerName("defaultManager"));
+            if (SendTrash(manager, sel_registerName("trashItemAtURL:resultingItemURL:error:"), url, 0, out var error))
+                return null;
+            var description = error == 0 ? 0 : Send(error, sel_registerName("localizedDescription"));
+            return new Filee.Core.Platform.TrashRefusal("trash.failed",
+                description == 0 ? null : Marshal.PtrToStringUTF8(Send(description, sel_registerName("UTF8String"))));
+        }
+        finally
+        {
+            CFRelease(text);
+        }
+    }
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private static extern bool SendTrash(nint receiver, nint selector, nint url, nint resultingUrl, out nint error);
+
     private readonly struct AutoreleasePool : IDisposable
     {
         private readonly nint _pool = Send(Send(objc_getClass("NSAutoreleasePool"), sel_registerName("alloc")), sel_registerName("init"));
@@ -219,12 +296,26 @@ internal static class NativeMethods
     private static extern nint Send(nint receiver, nint selector);
 
     [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    private static extern nint Send(nint receiver, nint selector, nint argument);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
     [return: MarshalAs(UnmanagedType.I1)]
     private static extern bool SendBool(nint receiver, nint selector);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private static extern bool SendBool(nint receiver, nint selector, nint argument);
 
     [DllImport(ObjC, EntryPoint = "objc_msgSend")]
     private static extern void SendVoid(nint receiver, nint selector);
 
     [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    private static extern void SendVoid(nint receiver, nint selector, nint argument);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
     private static extern void SendInteger(nint receiver, nint selector, nint value);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private static extern bool SendBoolWithInteger(nint receiver, nint selector, nint value);
 }

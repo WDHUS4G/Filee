@@ -1,5 +1,5 @@
 {
-  "_comment": "Downloadable conversion engines: pinned URL + SHA-256. Used by the app (Settings > Engines, first-run setup) and by build/fetch-engines.ps1. Bumping a version = change url, sha256 and size together.",
+  "_comment": "Downloadable conversion engines: pinned URL + SHA-256. Used by the app (Settings > Engines, first-run setup) and by build/fetch-engines.ps1. Bumping a version = change url, sha256 and size together. minimumMacOS: the oldest macOS a macOS download runs on; older Macs are not offered it.",
   "components": {
     "rhwp": {
       "version": "0.8.7",
@@ -70,6 +70,13 @@
       "sha256": "0F96AE06165C2419607C1C66726C091A78E89E08EA69F077CF3E2C884E800853",
       "size": 226549760,
       "kind": "msi"
+    },
+    "tesseract": {
+      "version": "5.4.0.20240606",
+      "url": "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe",
+      "sha256": "C885FFF6998E0608BA4BB8AB51436E1C6775C2BAFC2559A19B423E18678B60C9",
+      "size": 50175248,
+      "kind": "nsis"
     }
   },
   "platforms": {
@@ -105,7 +112,7 @@
         },
         "calibre": {
           "version": "9.15.0",
-          "url": "https://github.com/kovidgoyal/calibre/releases/download/v9.15.0/calibre-9.15.0-x86_64.txz",
+          "url": "https://download.calibre-ebook.com/9.15.0/calibre-9.15.0-x86_64.txz",
           "sha256": "3F5301C0AA51E5FB2D5F6DCD04024BA4E86501AB328CE5D9D6760EFCCB887990",
           "size": 194998300,
           "kind": "tar.xz"
@@ -144,7 +151,7 @@
         },
         "calibre": {
           "version": "9.15.0",
-          "url": "https://github.com/kovidgoyal/calibre/releases/download/v9.15.0/calibre-9.15.0-arm64.txz",
+          "url": "https://download.calibre-ebook.com/9.15.0/calibre-9.15.0-arm64.txz",
           "sha256": "15AB887F9D787809BC834CA0EA6408E981B409F0B23046C41C18DE948EB50A38",
           "size": 182488416,
           "kind": "tar.xz"
@@ -176,10 +183,11 @@
         },
         "calibre": {
           "version": "9.15.0",
-          "url": "https://github.com/kovidgoyal/calibre/releases/download/v9.15.0/calibre-9.15.0.dmg",
+          "url": "https://download.calibre-ebook.com/9.15.0/calibre-9.15.0.dmg",
           "sha256": "1B3A7451175B73AE2BAA28FE1BC1C53EE34D65B489881E7EC02C20F9E0FF6019",
           "size": 350293492,
-          "kind": "dmg"
+          "kind": "dmg",
+          "minimumMacOS": "14.0"
         },
         "libreoffice": {
           "version": "26.2.6",
@@ -215,10 +223,11 @@
         },
         "calibre": {
           "version": "9.15.0",
-          "url": "https://github.com/kovidgoyal/calibre/releases/download/v9.15.0/calibre-9.15.0.dmg",
+          "url": "https://download.calibre-ebook.com/9.15.0/calibre-9.15.0.dmg",
           "sha256": "1B3A7451175B73AE2BAA28FE1BC1C53EE34D65B489881E7EC02C20F9E0FF6019",
           "size": 350293492,
-          "kind": "dmg"
+          "kind": "dmg",
+          "minimumMacOS": "14.0"
         },
         "libreoffice": {
           "version": "26.2.6",

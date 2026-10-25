@@ -1,0 +1,59 @@
+name: Bug report
+description: Something doesn't convert or behaves wrongly
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files involved
+      description: Formats and sizes. Attach a sample if you can share it.
+  - type: input
+    id: version
+    attributes:
+      label: Filee version
+      description: Settings → About
+      placeholder: "2.1.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11 26H2, macOS 15, Ubuntu 24.04…"
+    validations:
+      required: true
+  - type: textarea
+    id: engines
+    attributes:
+      label: Engines page status
+      description: A screenshot helps. Drag it into this box.
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        The last lines of the newest `filee-<date>.log`.
+        Windows: `%APPDATA%\Filee\logs`
+        macOS: `~/Library/Application Support/Filee/logs`
+        Linux: `~/.config/Filee/logs`
+      render: text

@@ -187,7 +187,11 @@ internal static class ObjFormat
         return text.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries).Select(n => Resolve(directory, n)).OfType<string>();
     }
 
-    /// <summary>Finds a file referenced from an OBJ / MTL: relative to <paramref name="directory"/>, else by name only.</summary>
+    /// <summary>
+    /// Finds a file referenced from a 3D model (an .mtl, a texture, a glTF buffer) inside <paramref name="directory"/>
+    /// or a folder below it, else by name only in <paramref name="directory"/>. A path that climbs out or points
+    /// elsewhere is never opened: a downloaded model must not pull a picture from anywhere on the disk into its output.
+    /// </summary>
     internal static string? Resolve(string directory, string reference)
     {
         reference = reference.Trim().Trim('"').Replace('\\', '/');
@@ -195,10 +199,14 @@ internal static class ObjFormat
             return null;
         try
         {
-            var candidate = Path.GetFullPath(Path.Combine(directory, reference));
-            if (File.Exists(candidate))
+            var root = Path.GetFullPath(directory);
+            if (!Path.EndsInDirectorySeparator(root))
+                root += Path.DirectorySeparatorChar; // a drive or "/" already ends in one
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var candidate = Path.GetFullPath(Path.Combine(root, reference));
+            if (candidate.StartsWith(root, comparison) && File.Exists(candidate))
                 return candidate;
-            candidate = Path.Combine(directory, Path.GetFileName(reference));
+            candidate = Path.Combine(root, Path.GetFileName(reference));
             return File.Exists(candidate) ? candidate : null;
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)

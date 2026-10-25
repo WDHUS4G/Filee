@@ -4,6 +4,7 @@
 
 using ACadSharp;
 using ACadSharp.Entities;
+using ACadSharp.Objects;
 using ACadSharp.Tables;
 using SkiaSharp;
 using AcadColor = ACadSharp.Color;
@@ -56,6 +57,46 @@ internal sealed partial class CadSceneBuilder
             builder.DrawEntities(paper.Entities, DrawContext.Root);
         }
         return builder._scene;
+    }
+
+    /// <summary>
+    /// The paper-space layouts that have something on them, in tab order (#172): each one's own entities (title block,
+    /// notes) and the viewports that show model space. Empty when the drawing has none, or when no layout has anything
+    /// of its own besides viewports, so it is drawn as before.
+    /// </summary>
+    public static List<LayoutSheet> BuildLayouts(CadDocument document, CancellationToken cancellationToken)
+    {
+        var sheets = new List<LayoutSheet>();
+        foreach (var layout in document.Layouts
+                     .Where(l => l.Name != Layout.ModelLayoutName && l.AssociatedBlock is not null)
+                     .OrderBy(l => l.TabOrder))
+        {
+            var builder = new CadSceneBuilder(document, cancellationToken);
+            builder._scene.Space = layout.Name;
+            builder.DrawEntities(layout.AssociatedBlock!.Entities, DrawContext.Root);
+            // The viewport that is the sheet itself (RepresentsPaper) shows no model space, and one that is off shows
+            // nothing. Twisted views are drawn untwisted, and every view is drawn from the top.
+            var views = layout.AssociatedBlock.Entities.OfType<Viewport>()
+                .Where(v => !v.RepresentsPaper && !v.Status.HasFlag(ViewportStatusFlags.ViewportOff)
+                            && v.Width > 0 && v.Height > 0 && v.ViewHeight > 0)
+                .Select(v =>
+                {
+                    var frame = Box2.Empty;
+                    frame.Add(new Vec2(v.Center.X - v.Width / 2, v.Center.Y - v.Height / 2));
+                    frame.Add(new Vec2(v.Center.X + v.Width / 2, v.Center.Y + v.Height / 2));
+                    // The view centre is in display coordinates, whose origin is the view target (WCS).
+                    return new ViewportView(frame, new Vec2(v.ViewTarget.X + v.ViewCenter.X, v.ViewTarget.Y + v.ViewCenter.Y),
+                        v.Height / v.ViewHeight);
+                })
+                .Where(v => !v.Frame.IsEmpty)
+                .ToList();
+            if (builder._scene.Items.Count > 0 || views.Count > 0)
+                sheets.Add(new LayoutSheet(layout.Name, builder._scene, views));
+        }
+        // AutoCAD gives a layout a viewport the first time its tab is opened: a drawing made in model space then has a
+        // Layout1 with only that viewport and an old view. Without a border, title block or notes on any layout, the
+        // whole of model space is the better page.
+        return sheets.Any(s => s.Paper.Items.Count > 0) ? sheets : [];
     }
 
     private static BlockRecord? TryGetPaperSpace(CadDocument document) =>

@@ -1,0 +1,91 @@
+{
+  "version": "2.0.0",
+  "slides": [
+    {
+      "id": "browser",
+      "media": "browser.webp",
+      "poster": 52,
+      "title": "whats_new.2_0_0.browser.title",
+      "text": "whats_new.2_0_0.browser.text"
+    },
+    {
+      "id": "flip",
+      "media": "flip.webp",
+      "poster": 75,
+      "title": "whats_new.2_0_0.flip.title",
+      "text": "whats_new.2_0_0.flip.text"
+    },
+    {
+      "id": "formats",
+      "media": "formats.webp",
+      "title": "whats_new.2_0_0.formats.title",
+      "text": "whats_new.2_0_0.formats.text",
+      "localizedMedia": {
+        "pt-PT": {
+          "media": "pt-PT/formats.webp",
+          "poster": 0
+        },
+        "pt-BR": {
+          "media": "pt-BR/formats.webp",
+          "poster": 0
+        }
+      }
+    },
+    {
+      "id": "crop",
+      "media": "crop.webp",
+      "poster": 57,
+      "title": "whats_new.2_0_0.crop.title",
+      "text": "whats_new.2_0_0.crop.text",
+      "localizedMedia": {
+        "pt-PT": {
+          "media": "pt-PT/crop.webp",
+          "poster": 57
+        },
+        "pt-BR": {
+          "media": "pt-BR/crop.webp",
+          "poster": 57
+        }
+      }
+    },
+    {
+      "id": "theme",
+      "media": "theme.webp",
+      "poster": 28,
+      "title": "whats_new.2_0_0.theme.title",
+      "text": "whats_new.2_0_0.theme.text",
+      "localizedMedia": {
+        "pt-PT": {
+          "media": "pt-PT/theme.webp",
+          "poster": 24
+        },
+        "pt-BR": {
+          "media": "pt-BR/theme.webp",
+          "poster": 24
+        }
+      }
+    },
+    {
+      "id": "languages",
+      "media": "languages.webp",
+      "title": "whats_new.2_0_0.languages.title",
+      "text": "whats_new.2_0_0.languages.text"
+    },
+    {
+      "id": "more",
+      "media": "more.webp",
+      "title": "whats_new.2_0_0.more.title",
+      "text": "whats_new.2_0_0.more.text",
+      "localizedMedia": {
+        "pt-PT": {
+          "media": "pt-PT/more.webp",
+          "poster": 0
+        },
+        "pt-BR": {
+          "media": "pt-BR/more.webp",
+          "poster": 0
+        }
+      }
+    }
+  ]
+}

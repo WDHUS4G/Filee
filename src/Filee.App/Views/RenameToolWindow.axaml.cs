@@ -13,6 +13,7 @@ public partial class RenameToolWindow : Window
     {
         InitializeComponent();
         Motion.Track(this);
+        UiZoom.Track(this);
     }
 
     /// <summary>Double-clicking a ready-made replacement adds it as a step, like its + button.</summary>

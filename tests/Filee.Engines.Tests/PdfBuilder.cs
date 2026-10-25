@@ -1,6 +1,7 @@
 // Builds small PDF files for the PDF reader tests with PdfPig's writer: text in the standard 14 fonts (every PDF
 // reader has them, so no font file is needed and the tests run on machines without Windows fonts), wrapped
-// paragraphs, colours, pictures, links and several pages. PDFsharp adds password protection to a finished file.
+// paragraphs, colours, pictures, links, lines and filled bars (ruled tables) and several pages. PDFsharp adds password
+// protection to a finished file.
 
 using ImageMagick;
 using PdfSharp.Pdf.IO;
@@ -98,6 +99,24 @@ internal sealed class PdfBuilder
             Page.AddPng(bytes, rect);
         else
             Page.AddJpeg(bytes, rect);
+        return this;
+    }
+
+    /// <summary>A stroked straight line from (x1, y1) to (x2, y2).</summary>
+    public PdfBuilder Rule(double x1, double y1, double x2, double y2, double width = 0.5)
+    {
+        Page.DrawLine(new PdfPoint(x1, _height - y1), new PdfPoint(x2, _height - y2), width);
+        return this;
+    }
+
+    /// <summary>A filled rectangle (a thick rule drawn as a bar, or shading) with its top-left corner at (x, y).</summary>
+    public PdfBuilder Bar(double x, double y, double width, double height, (byte R, byte G, byte B)? color = null)
+    {
+        var (r, g, b) = color ?? ((byte)0, (byte)0, (byte)0);
+        Page.SetTextAndFillColor(r, g, b);
+        Page.SetStrokeColor(r, g, b);
+        Page.DrawRectangle(new PdfPoint(x, _height - y - height), width, height, 0.1, fill: true);
+        Page.ResetColor();
         return this;
     }
 

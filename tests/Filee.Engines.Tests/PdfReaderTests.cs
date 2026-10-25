@@ -1,9 +1,11 @@
-// PDF → DOCX / HWPX / TXT with the built-in PDF reader (PdfPig): paragraphs in reading order (two-column pages
-// too), headings from font sizes, bold / italic / colour, links, pictures (JPEG kept as it is), repeated headers and
-// footers left out, scanned pages as page pictures, and a clear error for password-protected files.
+// PDF → DOCX / HWPX / TXT / Markdown with the built-in PDF reader (PdfPig): paragraphs in reading order (two-column
+// pages too), headings from font sizes, bold / italic / colour, links, pictures (JPEG kept as it is; next to a
+// Markdown file in "<name>_files"), repeated headers, footers, page numbers and logos left out, scanned pages as page
+// pictures, and a clear error for password-protected files.
 // The test PDFs use the standard 14 fonts, so no installed font is needed (only the Korean test embeds one, if any).
 
 using System.IO.Compression;
+using System.Text.RegularExpressions;
 using Filee.Core.Conversion;
 using Filee.Core.Presets;
 using Filee.Engines.Hwp.Hwpx;
@@ -225,6 +227,108 @@ public class PdfReaderTests(EngineFixture fx) : IClassFixture<EngineFixture>
         HwpxAssert.RenderWithRhwp(fx, hwpx, "pdf-report");
     }
 
+    /// <summary>Picture links of a Markdown file, as written by MarkdownWriter: <c>![](&lt;report_files/img0001.jpg&gt;)</c>.</summary>
+    private static List<string> PictureLinks(string markdown) =>
+        [.. Regex.Matches(markdown, @"!\[\]\(<([^>]+)>\)").Select(m => m.Groups[1].Value)];
+
+    [Fact]
+    public async Task Pdf_to_markdown_saves_the_pictures_next_to_it()
+    {
+        Assert.Equal("pdf-text", Assert.Single(fx.Catalog.CreatePlanner().Plan("pdf", "md")!.Steps).Converter.Id);
+        var dir = fx.NewFolder();
+        var path = Report(dir);
+
+        var md = await ConvertAsync(path, "md");
+
+        Assert.Equal(Path.Combine(dir, "report.md"), md);
+        var markdown = await File.ReadAllTextAsync(md, TestContext.Current.CancellationToken);
+        Assert.StartsWith("# Annual Report 2026\n\n## 1. Introduction\n\n" + First + "\n\n", markdown, StringComparison.Ordinal);
+        Assert.Contains("## 2. Details\n\n" + Second, markdown);
+        Assert.Contains("**Warning**", markdown);
+        Assert.Contains("(<https://example.com/>)", markdown);
+        // No running header, footer or page number; no quote marks from the PDF's indents.
+        Assert.DoesNotContain("Quarterly", markdown);
+        Assert.DoesNotContain("Page", markdown);
+        Assert.DoesNotContain("> ", markdown);
+
+        // The pictures are files in "report_files", linked relatively; the JPEG is the PDF's own.
+        var links = PictureLinks(markdown);
+        Assert.Equal(["report_files/img0001.jpg", "report_files/img0002.png"], links);
+        Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(dir, "photo.jpg"), TestContext.Current.CancellationToken),
+            await File.ReadAllBytesAsync(Path.Combine(dir, "report_files", "img0001.jpg"), TestContext.Current.CancellationToken));
+        Assert.True(File.Exists(Path.Combine(dir, "report_files", "img0002.png")));
+
+        // Converted again: a new Markdown file gets a new folder instead of writing into the first one.
+        var again = await ConvertAsync(path, "md");
+        Assert.Equal(Path.Combine(dir, "report (2).md"), again);
+        var second = PictureLinks(await File.ReadAllTextAsync(again, TestContext.Current.CancellationToken));
+        Assert.Equal(["report_files%20%282%29/img0001.jpg", "report_files%20%282%29/img0002.png"], second);
+        Assert.All(second, link => Assert.True(File.Exists(Path.Combine(dir, Uri.UnescapeDataString(link)))));
+    }
+
+    [Fact]
+    public async Task Pdf_to_markdown_can_leave_out_the_pictures()
+    {
+        var dir = fx.NewFolder();
+        var path = Report(dir);
+
+        var job = await fx.ConvertAsync([path], new Preset { TargetFormat = "md", Document = { LeaveOutPictures = true } });
+
+        Assert.Equal(JobState.Completed, job.State);
+        var markdown = await File.ReadAllTextAsync(job.Outputs.Single(), TestContext.Current.CancellationToken);
+        Assert.Contains("# Annual Report 2026", markdown);
+        Assert.Contains(Second, markdown);
+        Assert.DoesNotContain("![", markdown);
+        Assert.Empty(Directory.GetDirectories(dir));
+    }
+
+    /// <summary>
+    /// Eight pages of a book: a running head per chapter (three and five pages), roman page numbers, a logo in the
+    /// corner of every page, a larger heading at the top of three pages and a photo on page 2.
+    /// </summary>
+    private static string Book(string folder)
+    {
+        var pdf = new PdfBuilder();
+        var logo = PdfBuilder.Photo(folder, "logo.png", MagickFormat.Png, 60, 30);
+        string[] roman = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii"];
+        for (var page = 1; page <= 8; page++)
+        {
+            pdf.NewPage();
+            var regular = pdf.Font();
+            pdf.Line(page <= 3 ? "Chapter One: Beginnings" : "Chapter Two: Results", 9, regular, 50, 30);
+            pdf.Picture(logo, 485, 15, 60, 30);
+            pdf.Line(roman[page - 1], 9, regular, 295, 815);
+            if (page <= 3)
+                pdf.Line("Overview", 16, pdf.Font(bold: true), 50, 75);
+            pdf.Paragraph($"Body text of page {page} goes on long enough to be a real paragraph of the book.", 11, regular, 50, 120, 495, 14);
+            if (page == 2)
+                pdf.Picture(PdfBuilder.Photo(folder, "photo.jpg", MagickFormat.Jpeg), 50, 200, 200, 120);
+        }
+        return pdf.Save(Path.Combine(folder, "book.pdf"));
+    }
+
+    [Fact]
+    public async Task Running_heads_per_chapter_roman_page_numbers_and_logos_are_left_out()
+    {
+        var dir = fx.NewFolder();
+
+        var markdown = await File.ReadAllTextAsync(await ConvertAsync(Book(dir), "md"), TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain("Chapter", markdown);
+        Assert.DoesNotMatch(new Regex("^(i|ii|iii|iv|v|vi|vii|viii)$", RegexOptions.Multiline), markdown);
+        // The heading at the top of three pages is larger than the body text: content, not a running head.
+        Assert.Equal(3, Regex.Matches(markdown, "^# Overview$", RegexOptions.Multiline).Count);
+        for (var page = 1; page <= 8; page++)
+            Assert.Contains($"Body text of page {page} ", markdown);
+        // Only the photo: the logo repeats in the corner of every page.
+        Assert.Equal(["book_files/img0001.jpg"], PictureLinks(markdown));
+
+        // The same for plain text (no pictures there anyway).
+        var text = await File.ReadAllTextAsync(await ConvertAsync(Path.Combine(dir, "book.pdf"), "txt"), TestContext.Current.CancellationToken);
+        Assert.DoesNotContain("Chapter", text);
+        Assert.StartsWith("Overview\r\n\r\nBody text of page 1 ", text.TrimStart('﻿'), StringComparison.Ordinal);
+    }
+
     /// <summary>Hangul needs an embedded font; the test uses Malgun Gothic when the system has it.</summary>
     [Fact]
     public async Task Korean_lines_join_into_one_paragraph()
@@ -265,6 +369,16 @@ public class PdfReaderTests(EngineFixture fx) : IClassFixture<EngineFixture>
     [InlineData("Helvetica-Oblique", "Arial")]
     [InlineData("QWERTY+MalgunGothic,Bold", "Malgun Gothic")]
     [InlineData("NanumGothic", "NanumGothic")]
+    [InlineData("TGNRPS+ArialUnicodeMS", "Arial Unicode MS")]
+    [InlineData("RESVUN+NirmalaUI-Bold", "Nirmala UI")]
+    [InlineData("BAAAAA+ArialMT", "Arial")]
+    [InlineData("TraditionalArabic,Bold", "Traditional Arabic")]
+    [InlineData("NotoSansGujarati-Regular", "Noto Sans Gujarati")]
+    [InlineData("NotoNaskhArabicUI-Bold", "Noto Naskh Arabic UI")]
+    [InlineData("NotoSansCJKkr-Regular", "Noto Sans CJK KR")]
+    [InlineData("DejaVuSans-Bold", "DejaVu Sans")]
+    [InlineData("LiberationSerif-Italic", "Liberation Serif")]
+    [InlineData("Mangal", "Mangal")]
     [InlineData("F1", null)]
     [InlineData("T3Font_2", null)]
     public void Font_names_become_families(string postScript, string? family) =>

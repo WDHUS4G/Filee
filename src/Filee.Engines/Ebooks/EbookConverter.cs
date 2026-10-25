@@ -10,6 +10,7 @@ using Filee.Core.Conversion;
 using Filee.Engines.Hwp.Hwpx;
 using Filee.Engines.Hwp.Hwpx.Docx;
 using Filee.Engines.Infrastructure;
+using Filee.Engines.Text;
 
 namespace Filee.Engines.Ebooks;
 
@@ -159,8 +160,11 @@ public sealed class EbookConverter : IConverter
                     break;
                 }
             case "md":
-                File.WriteAllText(output, MarkdownWriter.Write(book.Document, MarkdownImages(output, work)), new UTF8Encoding(false));
-                break;
+                {
+                    Func<string, string?> pictures = step.Preset.Document.LeaveOutPictures ? _ => null : new MarkdownPictures(output, step.Output, work).Add;
+                    File.WriteAllText(output, MarkdownWriter.Write(book.Document, pictures), new UTF8Encoding(false));
+                    break;
+                }
             case "fb2":
                 Fb2Writer.Write(book, output, step.InputPath, work);
                 break;
@@ -206,24 +210,4 @@ public sealed class EbookConverter : IConverter
         EbookFiles.CommonImage(path, convertFolder, gifAndSvg: true) is ({ } file, { } mediaType)
             ? $"data:{mediaType};base64,{System.Convert.ToBase64String(File.ReadAllBytes(file))}"
             : null;
-
-    /// <summary>Pictures of a Markdown export go to "&lt;name&gt;_files" next to it, referenced relatively.</summary>
-    private static Func<string, string?> MarkdownImages(string output, string work)
-    {
-        var folderName = Path.GetFileNameWithoutExtension(output) + "_files";
-        var folder = Path.Combine(Path.GetDirectoryName(output)!, folderName);
-        var convert = EbookFiles.NewFolder(work, "md-images");
-        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        return path =>
-        {
-            if (names.TryGetValue(path, out var known))
-                return known;
-            if (EbookFiles.CommonImage(path, convert, gifAndSvg: true) is not ({ } file, _))
-                return null;
-            Directory.CreateDirectory(folder);
-            var name = $"img{names.Count + 1:0000}{Path.GetExtension(file).ToLowerInvariant()}";
-            File.Copy(file, Path.Combine(folder, name), overwrite: true);
-            return names[path] = $"{Uri.EscapeDataString(folderName)}/{name}";
-        };
-    }
 }

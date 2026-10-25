@@ -19,7 +19,8 @@
              VerticalAlignment="Top" Margin="0,2,12,0" />
       <StackPanel Spacing="8">
         <DockPanel>
-          <Button DockPanel.Dock="Right" Classes="icon" Padding="4" VerticalAlignment="Top" Click="OnClose">
+          <Button DockPanel.Dock="Right" Classes="icon" Padding="4" VerticalAlignment="Top" Click="OnClose"
+                  AutomationProperties.Name="{DynamicResource common.close}">
             <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Close}" />
           </Button>
           <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"

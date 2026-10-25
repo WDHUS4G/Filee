@@ -187,9 +187,11 @@ public sealed partial class RenameStepViewModel : ObservableObject
         _ => "watch.ph.replace",
     });
 
-    partial void OnKindChanged(Choice<RenameKind> value)
+    partial void OnKindChanged(Choice<RenameKind>? oldValue, Choice<RenameKind> newValue)
     {
-        Step.Kind = value.Value;
+        if (Choices.Restore(oldValue, newValue, v => Kind = v))
+            return;
+        Step.Kind = newValue.Value;
         OnPropertyChanged(nameof(ShowFind));
         OnPropertyChanged(nameof(ShowReplace));
         OnPropertyChanged(nameof(ShowArrow));
