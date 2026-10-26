@@ -26,6 +26,7 @@ public class RenderTests
         { "home", "en" }, { "general", "en" }, { "triggers", "en" }, { "toolbar", "en" },
         { "presets", "en" }, { "theme", "en" }, { "engines", "en" }, { "about", "en" },
         { "toolbar", "ko" }, { "home", "ko" }, { "presets", "zh-CN" }, { "toolbar", "zh-CN" }, { "home", "zh-CN" },
+        { "home", "tr" }, { "toolbar", "tr" },
     };
 
     [AvaloniaTheory]

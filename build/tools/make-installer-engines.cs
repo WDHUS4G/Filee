@@ -22,7 +22,7 @@ while (!File.Exists(Path.Combine(repo, "Filee.slnx")))
     repo = Path.GetDirectoryName(repo) ?? throw new InvalidOperationException("Run this from inside the Filee repository.");
 
 // [Languages] names in installer/Filee.iss → the app's translation files.
-(string Inno, string App)[] languages = [("en", "en"), ("ko", "ko"), ("zhcn", "zh-CN")];
+(string Inno, string App)[] languages = [("en", "en"), ("ko", "ko"), ("zhcn", "zh-CN"), ("tr", "tr")];
 var texts = languages.ToDictionary(l => l.Inno, l => Load(Path.Combine(repo, "src", "Filee.App", "Assets", "i18n", l.App + ".json")));
 
 // The file is included in the middle of [Code], where a ";" line would be Pascal: open a section first.

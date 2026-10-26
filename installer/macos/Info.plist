@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleLocalizations</key><array><string>en</string><string>ko</string><string>zh-Hans</string></array>
+    <key>CFBundleLocalizations</key><array><string>en</string><string>ko</string><string>zh-Hans</string><string>tr</string></array>
     <key>CFBundleIdentifier</key><string>com.filee.app</string>
     <key>CFBundleName</key><string>Filee</string>
     <key>CFBundleDisplayName</key><string>Filee</string>

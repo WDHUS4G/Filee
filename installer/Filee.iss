@@ -1,4 +1,4 @@
-﻿; Filee installer (Inno Setup 7). Build it with build/build-installer.ps1, which publishes the app, generates
+; Filee installer (Inno Setup 7). Build it with build/build-installer.ps1, which publishes the app, generates
 ; obj\engines.iss (build/tools/make-installer-engines.cs) and runs
 ;   ISCC.exe /DAppVersion=1.2.0 /DPublishDir=<published app> /O<output folder> installer\Filee.iss
 ;
@@ -73,36 +73,46 @@ SetupLogging=yes
 Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "ko"; MessagesFile: "compiler:Languages\Korean.isl"
 Name: "zhcn"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "tr"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 ; Texts shared with the app (engine names, the two options of the General page) are generated into obj\engines.iss.
 [CustomMessages]
 en.GroupOptions=Options:
 ko.GroupOptions=옵션:
 zhcn.GroupOptions=选项：
+tr.GroupOptions=Seçenekler:
 en.TaskModernMenu=Also show it at the top of the Windows 11 menu, not only under “Show more options”
 ko.TaskModernMenu=Windows 11 기본 메뉴에도 표시 (“추가 옵션 표시”를 누르지 않아도 보여요)
 zhcn.TaskModernMenu=也显示在 Windows 11 主菜单中，而不仅是“显示更多选项”里
+tr.TaskModernMenu=Yalnızca “Daha fazla seçenek göster” altında değil, Windows 11 ana menüsünün en üstünde de göster
 en.StatusRemovingOld=Removing the previous version (settings and engines are kept)...
 ko.StatusRemovingOld=이전 버전을 정리하는 중 (설정과 엔진은 그대로 둬요)...
 zhcn.StatusRemovingOld=正在移除旧版本（保留设置和引擎）...
+tr.StatusRemovingOld=Önceki sürüm kaldırılıyor (ayarlar ve motorlar korunur)...
 en.StatusExplorerMenu=Adding Filee to the File Explorer menu...
 ko.StatusExplorerMenu=탐색기 메뉴에 Filee를 추가하는 중...
 zhcn.StatusExplorerMenu=正在将 Filee 添加到资源管理器菜单...
+tr.StatusExplorerMenu=Filee, Dosya Gezgini menüsüne ekleniyor...
 en.ExplorerMenuFailed=Windows did not add Filee to the top of the File Explorer menu:%n%n%1%n%nFilee still appears under “Show more options”. You can try again in Filee under Settings → General.
 ko.ExplorerMenuFailed=Windows가 탐색기 기본 메뉴에 Filee를 추가하지 못했어요:%n%n%1%n%nFilee는 “추가 옵션 표시” 안에는 계속 나타나요. Filee의 설정 → 일반에서 다시 시도할 수 있어요.
 zhcn.ExplorerMenuFailed=Windows 未能将 Filee 添加到资源管理器主菜单：%n%n%1%n%nFilee 仍会出现在“显示更多选项”中。你可以在 Filee 的 设置 → 常规 中重试。
+tr.ExplorerMenuFailed=Windows, Filee'yi Dosya Gezgini ana menüsünün en üstüne ekleyemedi:%n%n%1%n%nFilee yine de “Daha fazla seçenek göster” altında görünecektir. Filee Ayarlar → Genel bölümünden tekrar deneyebilirsiniz.
 en.ReadyEngines=Conversion engines (Filee downloads them when it starts):
 ko.ReadyEngines=변환 엔진 (Filee가 시작하면서 내려받아요):
 zhcn.ReadyEngines=转换引擎（Filee 启动后下载）：
+tr.ReadyEngines=Dönüştürme motorları (Filee başladığında indirilir):
 en.FinishedRunning=Filee is installed and running in the notification area of the taskbar.%n%nTo convert files, drag them while holding the trigger key, or right-click them in File Explorer.
 ko.FinishedRunning=Filee가 설치되어 작업 표시줄 알림 영역에서 실행 중이에요.%n%n파일을 변환하려면 지정한 키를 누른 채 파일을 끌거나, 탐색기에서 파일을 우클릭하세요.
 zhcn.FinishedRunning=Filee 已安装，正在任务栏通知区域运行。%n%n要转换文件，请按住触发键拖动文件，或在资源管理器中右键单击文件。
+tr.FinishedRunning=Filee kuruldu ve görev çubuğunun bildirim alanında çalışıyor.%n%nDosyaları dönüştürmek için tetikleyici tuşu basılı tutarak sürükleyin veya Dosya Gezgini'nde sağ tıklayın.
 en.TaskCli=Add the "filee" command to PATH (convert from the command line)
 ko.TaskCli="filee" 명령어를 PATH에 추가 (명령줄에서 변환)
 zhcn.TaskCli=将 "filee" 命令添加到 PATH（在命令行中转换）
+tr.TaskCli="filee" komutunu PATH'e ekle (komut satırından dönüştürün)
 en.FinishedEngines=The conversion engines you picked are downloading in the Filee window.
 ko.FinishedEngines=선택한 변환 엔진은 Filee 창에서 내려받고 있어요.
 zhcn.FinishedEngines=你选择的转换引擎正在 Filee 窗口中下载。
+tr.FinishedEngines=Seçtiğiniz dönüştürme motorları Filee penceresinde indiriliyor.
 
 [Tasks]
 Name: "contextmenu"; Description: "{cm:TaskContextMenu}"; GroupDescription: "{cm:GroupOptions}"; Check: IsFreshInstall

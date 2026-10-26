@@ -1,9 +1,10 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Filee.App.Services;
 
 namespace Filee.App.Tests;
 
-/// <summary>Keeps en / ko / zh-CN in sync so no language silently falls back to English.</summary>
+/// <summary>Keeps en / ko / zh-CN / tr in sync so no language silently falls back to English.</summary>
 public partial class LocalizationTests
 {
     private static string I18nDirectory
@@ -20,7 +21,7 @@ public partial class LocalizationTests
     private static Dictionary<string, string> Load(string code) =>
         JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(Path.Combine(I18nDirectory, code + ".json")))!;
 
-    public static TheoryData<string> Languages => new() { "ko", "zh-CN" };
+    public static TheoryData<string> Languages => new() { "ko", "zh-CN", "tr" };
 
     [Theory]
     [MemberData(nameof(Languages))]
@@ -57,6 +58,20 @@ public partial class LocalizationTests
             .ToList();
 
         Assert.Empty(missing);
+    }
+
+    [Theory]
+    [InlineData("en", "en")]
+    [InlineData("en-US", "en")]
+    [InlineData("ko", "ko")]
+    [InlineData("ko-KR", "ko")]
+    [InlineData("zh-CN", "zh-CN")]
+    [InlineData("tr", "tr")]
+    [InlineData("tr-TR", "tr")]
+    [InlineData("frr", "en")]
+    public void Auto_follows_the_language_the_user_reads_the_os_in(string osCulture, string expected)
+    {
+        Assert.Equal(expected, LocalizationService.Resolve(osCulture));
     }
 
     private static HashSet<string> Placeholders(string text) =>

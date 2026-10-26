@@ -24,7 +24,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6A62C9" alt="MIT 许可证"></a>
 </p>
 
-<p align="center"><a href="README.md">English</a> · <a href="README.ko.md">한국어</a> · <b>简体中文</b></p>
+<p align="center"><a href="README.md">English</a> · <a href="README.ko.md">한국어</a> · <b>简体中文</b> · <a href="README.tr.md">Türkçe</a></p>
 
 <table>
   <tr>
@@ -61,7 +61,7 @@
 - **一次转换多个文件**，并行处理。需要多步的转换（HWP → HWPX → DOCX）会自动找到路线。
 - **监视文件夹**，放入的文件自动转换。
 - **其他方式** 右键菜单、键盘快捷键、拖放区域和 [`filee` 命令](#命令行)。
-- 浅色和深色主题，支持 English、한국어、简体中文。
+- 浅色和深色主题，支持 English、한국어、简体中文、Türkçe。
 
 ## 截图
 
